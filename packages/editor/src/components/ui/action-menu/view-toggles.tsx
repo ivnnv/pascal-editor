@@ -20,7 +20,7 @@ import { useUploadStore } from '../../../store/use-upload'
 import { SliderControl } from '../controls/slider-control'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
-import { useActionMenuPopupSide } from './placement'
+import { useActionMenuPopupSide, useActionMenuVertical } from './placement'
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
 const ACCEPTED_FILE_TYPES = '.glb,.gltf,image/jpeg,image/png,image/webp,image/gif'
@@ -949,16 +949,18 @@ function RiserControl() {
 // ── Exports ─────────────────────────────────────────────────────────────────
 
 export function SecondaryToggles() {
+  const vertical = useActionMenuVertical()
   return (
-    <div className="flex items-center gap-1">
+    <div className={cn('flex items-center gap-1', vertical && 'flex-col')}>
       <ReferencesControl />
     </div>
   )
 }
 
 export function ViewToggles() {
+  const vertical = useActionMenuVertical()
   return (
-    <div className="flex items-center gap-1">
+    <div className={cn('flex items-center gap-1', vertical && 'flex-col')}>
       <ScansControl />
       <GuidesControl />
       <ReferenceFloorControl />
