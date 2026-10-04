@@ -590,12 +590,12 @@ function ViewerCanvasControlsHint({
   }
 
   return (
-    // Sits under the viewer toolbar row as the layout reports it; without one,
+    // Sits under the whole viewer toolbar as the layout reports it; without one,
     // under a top-docked action menu or the default toolbar height.
     <div
       className="pointer-events-none absolute left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2"
       style={{
-        top: `calc(var(--viewer-toolbar-bottom, ${belowTopMenu ? '4.375rem' : '2.75rem'}) + 0.75rem)`,
+        top: `calc(var(--viewer-toolbar-full-bottom, ${belowTopMenu ? '4.375rem' : '2.75rem'}) + 0.75rem)`,
       }}
     >
       <section
@@ -1750,6 +1750,7 @@ function EditorContent({
                   {/* The inspector and the shortcuts card share one right column. */}
                   <div className="contents" style={rightRailInset}>
                     <RightStack
+                      reserveBottomMenu={menuPlacement === 'bottom' || isMobile}
                       helper={isCaptureMode ? null : <HelperManager />}
                       inspector={
                         isVersionPreviewMode || isCaptureMode || isStudioMode ? null : (
@@ -1845,7 +1846,11 @@ function EditorContent({
               <ActionMenu placement={menuPlacement} />
             </div>
             <div className="contents" style={rightRailInset}>
-              <RightStack helper={<HelperManager />} inspector={<PanelManager />} />
+              <RightStack
+                helper={<HelperManager />}
+                inspector={<PanelManager />}
+                reserveBottomMenu={menuPlacement === 'bottom' || isMobile}
+              />
             </div>
             <RiserDiagramPanel />
             {isFirstPersonMode && (
