@@ -869,6 +869,7 @@ export {
 } from './store/use-drawing-view'
 export type {
   CaptureMode,
+  FloorplanRightDragAction,
   FloorplanSelectionTool,
   Mode,
   SnapshotCropMode,
