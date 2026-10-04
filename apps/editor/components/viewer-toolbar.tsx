@@ -10,6 +10,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  type FloorplanRightDragAction,
   useEditor,
   useFloorplanAnnotationVisibility,
   useFloorplanMode,
@@ -26,6 +27,7 @@ import {
 import {
   Box,
   Check,
+  ChevronDown,
   ChevronsLeft,
   ChevronsRight,
   Columns2,
@@ -196,7 +198,48 @@ function ViewModeControl() {
           </ToolbarTooltip>
         )
       })}
+      {viewMode === '3d' ? null : <PlanDragControl />}
     </div>
+  )
+}
+
+const PLAN_DRAG_OPTIONS: { id: FloorplanRightDragAction; label: string }[] = [
+  { id: 'rotate', label: 'Right-drag rotates' },
+  { id: 'pan', label: 'Right-drag moves, middle-drag rotates' },
+]
+
+// What a right-button drag does in the 2D plan.
+function PlanDragControl() {
+  const action = useEditor((state) => state.floorplanRightDragAction)
+  const setAction = useEditor((state) => state.setFloorplanRightDragAction)
+
+  return (
+    <DropdownMenu>
+      <ToolbarTooltip label="2D navigation">
+        <DropdownMenuTrigger asChild>
+          <button
+            aria-label="2D navigation"
+            className={cn(TOOLBAR_BTN, 'w-6 border-border/40 border-l')}
+            type="button"
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+      </ToolbarTooltip>
+      <DropdownMenuContent
+        align="start"
+        className={SUBMENU_CONTENT_CLASS}
+        side="bottom"
+        sideOffset={8}
+      >
+        {PLAN_DRAG_OPTIONS.map((option) => (
+          <DropdownMenuItem key={option.id} onSelect={() => setAction(option.id)}>
+            <span>{option.label}</span>
+            {action === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

@@ -451,6 +451,17 @@ const EDITOR_CAMERA_CONTROL_HINTS: CameraControlHint[] = [
   { action: 'Zoom', keys: [{ value: 'Scroll' }] },
 ]
 
+// 2D plan with swapped buttons: right click pans, middle click rotates.
+const PLAN_PAN_CAMERA_CONTROL_HINTS: CameraControlHint[] = [
+  {
+    action: 'Pan',
+    keys: [{ value: 'Right click' }],
+    alternativeKeys: [{ value: 'Space' }, { value: 'Left click' }],
+  },
+  { action: 'Rotate', keys: [{ value: 'Middle click' }] },
+  { action: 'Zoom', keys: [{ value: 'Scroll' }] },
+]
+
 const PREVIEW_CAMERA_CONTROL_HINTS: CameraControlHint[] = [
   { action: 'Pan', keys: [{ value: 'Left click' }] },
   { action: 'Rotate', keys: [{ value: 'Right click' }] },
@@ -570,7 +581,14 @@ function ViewerCanvasControlsHint({
   isPreviewMode: boolean
   onDismiss: () => void
 }) {
-  const all = isPreviewMode ? PREVIEW_CAMERA_CONTROL_HINTS : EDITOR_CAMERA_CONTROL_HINTS
+  const planPans = useEditor(
+    (state) => state.viewMode === '2d' && state.floorplanRightDragAction === 'pan',
+  )
+  const all = isPreviewMode
+    ? PREVIEW_CAMERA_CONTROL_HINTS
+    : planPans
+      ? PLAN_PAN_CAMERA_CONTROL_HINTS
+      : EDITOR_CAMERA_CONTROL_HINTS
   // A host teaching one gesture at a time narrows this to the one it is asking
   // for, and to nothing once it is done. Null — the default — is all of them.
   const focus = useCameraHintFocus((state) => state.actions)
