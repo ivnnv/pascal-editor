@@ -12,6 +12,8 @@ import useEditor from './../../../store/use-editor'
 import { CameraActions } from './camera-actions'
 import { ControlModes } from './control-modes'
 import { type ActionMenuPlacement, ActionMenuPlacementProvider } from './placement'
+// AIKAZA: user-facing placement picker
+import { PlacementControl } from './placement-control'
 import { SecondaryToggles } from './view-toggles'
 
 // Mobile bottom offset matches the viewer's overlap behind the sheet's
@@ -107,6 +109,9 @@ export function ActionMenu({
               <SecondaryToggles />
               <div className={vertical ? 'my-1 h-px w-5 bg-border' : 'mx-1 h-5 w-px bg-border'} />
               <CameraActions />
+              {/* AIKAZA: user-facing placement picker */}
+              <div className={vertical ? 'my-1 h-px w-5 bg-border' : 'mx-1 h-5 w-px bg-border'} />
+              <PlacementControl />
             </div>
           )}
         </motion.div>

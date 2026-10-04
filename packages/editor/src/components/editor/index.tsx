@@ -72,6 +72,8 @@ import { BoxSelectTool } from '../tools/select/box-select-tool'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
 import type { ActionMenuPlacement } from '../ui/action-menu/placement'
+// AIKAZA: the user's own pick wins over the host default
+import { useActionMenuPlacementPreference } from '../ui/action-menu/placement-preference'
 import { CommandPalette, type CommandPaletteEmptyAction } from '../ui/command-palette'
 import { EditorCommands } from '../ui/command-palette/editor-commands'
 import { FloatingLevelSelector } from '../ui/floating-level-selector'
@@ -1364,7 +1366,10 @@ function EditorContent({
 }: EditorProps) {
   const isMobile = useIsMobile()
   // A top-docked menu joins the viewer toolbar row on desktop (layout v2).
-  const dockMenuInToolbar = actionMenuPlacement === 'top' && !isMobile
+  // AIKAZA: the user's own pick wins over the host default
+  const userMenuPlacement = useActionMenuPlacementPreference((state) => state.placement)
+  const menuPlacement = userMenuPlacement ?? actionMenuPlacement ?? 'bottom'
+  const dockMenuInToolbar = menuPlacement === 'top' && !isMobile
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const isStudioMode = useEditor((s) => s.workspaceMode === 'studio')
   const presentationProjectId = projectId ?? null
@@ -1633,7 +1638,7 @@ function EditorContent({
   const viewerCanvas = (
     <ViewerCanvas
       disablePostFx={disablePostFx}
-      hintBelowTopMenu={actionMenuPlacement === 'top' && !isMobile}
+      hintBelowTopMenu={menuPlacement === 'top' && !isMobile}
       hasLoadedInitialScene={hasLoadedInitialScene}
       isFirstPersonMode={isFirstPersonMode}
       isLoading={isLoading}
@@ -1734,7 +1739,7 @@ function EditorContent({
                     dockMenuInToolbar
                   ) && (
                     <div className="pointer-events-auto">
-                      <ActionMenu placement={actionMenuPlacement} />
+                      <ActionMenu placement={menuPlacement} />
                     </div>
                   )}
                   {/* The inspector and the shortcuts card share one right column. */}
@@ -1830,7 +1835,7 @@ function EditorContent({
           {/* Fixed UI overlays scoped to the viewer area */}
           <ViewerOverlays left={overlayLeft}>
             <div className="pointer-events-auto">
-              <ActionMenu placement={actionMenuPlacement} />
+              <ActionMenu placement={menuPlacement} />
             </div>
             <RightStack helper={<HelperManager />} inspector={<PanelManager />} />
             <RiserDiagramPanel />
