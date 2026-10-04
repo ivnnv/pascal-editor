@@ -20,7 +20,7 @@ import { useUploadStore } from '../../../store/use-upload'
 import { SliderControl } from '../controls/slider-control'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
-import { useActionMenuPopupSide, useActionMenuVertical } from './placement'
+import { useActionMenuArrowRotation, useActionMenuPopupSide, useActionMenuVertical } from './placement'
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
 const ACCEPTED_FILE_TYPES = '.glb,.gltf,image/jpeg,image/png,image/webp,image/gif'
@@ -667,6 +667,7 @@ function ReferencesControl() {
   const showGuides = useViewer((state) => state.showGuides)
   const setShowGuides = useViewer((state) => state.setShowGuides)
   const [isOpen, setIsOpen] = useState(false)
+  const arrowRotation = useActionMenuArrowRotation(isOpen)
   const [uploadError, setUploadError] = useState<string | null>(null)
 
   const scans = useLevelScans()
@@ -728,7 +729,7 @@ function ReferencesControl() {
             <ChevronDown
               className={cn(
                 'h-3 w-3 transition-transform',
-                vertical ? '-rotate-90' : isOpen && 'rotate-180',
+                arrowRotation,
               )}
             />
           </button>

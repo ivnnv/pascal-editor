@@ -25,7 +25,7 @@ import useEditor from '../../../store/use-editor'
 import useFloorplanMode from '../../../store/use-floorplan-mode'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
-import { useActionMenuPopupSide, useActionMenuVertical } from './placement'
+import { useActionMenuArrowRotation, useActionMenuPopupSide, useActionMenuVertical } from './placement'
 
 const measurementOptions = [
   { kind: 'distance', label: 'Distance', icon: Ruler },
@@ -65,6 +65,7 @@ export function MeasurementControl() {
   const popupSide = useActionMenuPopupSide()
   const vertical = useActionMenuVertical()
   const [isOpen, setIsOpen] = useState(false)
+  const arrowRotation = useActionMenuArrowRotation(isOpen)
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
   const floorplanMode = useFloorplanMode((state) => state.mode)
@@ -187,7 +188,7 @@ export function MeasurementControl() {
               aria-hidden="true"
               className={cn(
                 'h-3 w-3 transition-transform',
-                vertical ? '-rotate-90' : isOpen && 'rotate-180',
+                arrowRotation,
               )}
             />
           </button>

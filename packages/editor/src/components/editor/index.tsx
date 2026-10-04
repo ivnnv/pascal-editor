@@ -23,6 +23,7 @@ import {
   ViewerPresentations,
 } from '@pascal-app/viewer'
 import {
+  type CSSProperties,
   memo,
   Profiler,
   type ProfilerOnRenderCallback,
@@ -1370,6 +1371,10 @@ function EditorContent({
   const userMenuPlacement = useActionMenuPlacementPreference((state) => state.placement)
   const menuPlacement = userMenuPlacement ?? actionMenuPlacement ?? 'bottom'
   const dockMenuInToolbar = menuPlacement === 'top' && !isMobile
+  // AIKAZA: the right-docked rail pushes the inspector column inwards.
+  const rightRailInset = {
+    '--action-menu-right-inset': menuPlacement === 'right' && !isMobile ? '4.5rem' : '0px',
+  } as CSSProperties
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const isStudioMode = useEditor((s) => s.workspaceMode === 'studio')
   const presentationProjectId = projectId ?? null
@@ -1743,17 +1748,19 @@ function EditorContent({
                     </div>
                   )}
                   {/* The inspector and the shortcuts card share one right column. */}
-                  <RightStack
-                    helper={isCaptureMode ? null : <HelperManager />}
-                    inspector={
-                      isVersionPreviewMode || isCaptureMode || isStudioMode ? null : (
-                        <PanelManager
-                          inspectorFooter={inspectorFooter}
-                          multiSelectionFooter={multiSelectionFooter}
-                        />
-                      )
-                    }
-                  />
+                  <div className="contents" style={rightRailInset}>
+                    <RightStack
+                      helper={isCaptureMode ? null : <HelperManager />}
+                      inspector={
+                        isVersionPreviewMode || isCaptureMode || isStudioMode ? null : (
+                          <PanelManager
+                            inspectorFooter={inspectorFooter}
+                            multiSelectionFooter={multiSelectionFooter}
+                          />
+                        )
+                      }
+                    />
+                  </div>
                   {/* Capture mode drives walk / drone from its own overlay, which
                       owns the framing chrome — the walkthrough HUD would both
                       clutter the frame and offer a second, conflicting exit. */}
@@ -1837,7 +1844,9 @@ function EditorContent({
             <div className="pointer-events-auto">
               <ActionMenu placement={menuPlacement} />
             </div>
-            <RightStack helper={<HelperManager />} inspector={<PanelManager />} />
+            <div className="contents" style={rightRailInset}>
+              <RightStack helper={<HelperManager />} inspector={<PanelManager />} />
+            </div>
             <RiserDiagramPanel />
             {isFirstPersonMode && (
               <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />

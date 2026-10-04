@@ -61,7 +61,7 @@ export function ActionMenu({
 
   // Mobile keeps the bottom rail: the sheet owns the rest of the screen.
   const effectivePlacement = isMobile ? 'bottom' : placement
-  const vertical = effectivePlacement === 'left'
+  const vertical = effectivePlacement === 'left' || effectivePlacement === 'right'
 
   return (
     <ActionMenuPlacementProvider value={effectivePlacement}>
@@ -75,6 +75,8 @@ export function ActionMenu({
                 ? 'relative'
                 : effectivePlacement === 'left'
                   ? 'fixed top-1/2 left-4 -translate-y-1/2'
+                  : effectivePlacement === 'right'
+                    ? 'fixed top-1/2 right-4 -translate-y-1/2'
                   : effectivePlacement === 'top'
                     ? 'fixed top-3 left-1/2 -translate-x-1/2'
                     : 'fixed bottom-6 left-1/2 -translate-x-1/2',

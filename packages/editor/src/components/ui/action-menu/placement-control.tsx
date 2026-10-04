@@ -1,7 +1,7 @@
 'use client'
 
 // AIKAZA (fork addition, owned file, not upstream Pascal).
-import { PanelBottom, PanelLeft, PanelTop } from 'lucide-react'
+import { PanelBottom, PanelLeft, PanelRight, PanelTop } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '../../../lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
@@ -14,6 +14,7 @@ const PLACEMENT_OPTIONS: { value: ActionMenuPlacement; label: string; icon: type
     { value: 'bottom', label: 'Bottom', icon: PanelBottom },
     { value: 'top', label: 'Top', icon: PanelTop },
     { value: 'left', label: 'Left', icon: PanelLeft },
+    { value: 'right', label: 'Right', icon: PanelRight },
   ]
 
 /** Lets the user dock the action menu to another edge of the viewer. */

@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react'
 
 /** Viewport edge the action menu docks to. */
-export type ActionMenuPlacement = 'bottom' | 'top' | 'left'
+export type ActionMenuPlacement = 'bottom' | 'top' | 'left' | 'right'
 
 const ActionMenuPlacementContext = createContext<ActionMenuPlacement>('bottom')
 
@@ -12,13 +12,23 @@ export function useActionMenuPlacement(): ActionMenuPlacement {
 }
 
 /** Side tooltips and popovers open toward, away from the docked edge. */
-export function useActionMenuPopupSide(): 'top' | 'bottom' | 'right' {
+export function useActionMenuPopupSide(): 'top' | 'bottom' | 'left' | 'right' {
   const placement = useActionMenuPlacement()
   if (placement === 'left') return 'right'
+  if (placement === 'right') return 'left'
   return placement === 'top' ? 'bottom' : 'top'
 }
 
 /** True when the menu is a vertical rail and its groups stack top to bottom. */
 export function useActionMenuVertical(): boolean {
-  return useActionMenuPlacement() === 'left'
+  const placement = useActionMenuPlacement()
+  return placement === 'left' || placement === 'right'
+}
+
+/** Rotation that points a split-button arrow toward where its popover opens. */
+export function useActionMenuArrowRotation(isOpen: boolean): string | false {
+  const placement = useActionMenuPlacement()
+  if (placement === 'left') return '-rotate-90'
+  if (placement === 'right') return 'rotate-90'
+  return isOpen && 'rotate-180'
 }
