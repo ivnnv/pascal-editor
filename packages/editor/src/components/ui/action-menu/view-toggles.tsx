@@ -661,6 +661,7 @@ function ReferenceListSection({
 
 function ReferencesControl() {
   const popupSide = useActionMenuPopupSide()
+  const vertical = useActionMenuVertical()
   const showScans = useViewer((state) => state.showScans)
   const setShowScans = useViewer((state) => state.setShowScans)
   const showGuides = useViewer((state) => state.showGuides)
@@ -681,10 +682,10 @@ function ReferencesControl() {
 
   return (
     <Popover onOpenChange={setIsOpen} open={isOpen}>
-      <div className="flex items-center">
+      <div className={vertical ? 'relative' : 'flex items-center'}>
         <ActionButton
           className={cn(
-            'rounded-r-none p-0',
+            vertical ? 'p-0' : 'rounded-r-none p-0',
             anyVisible
               ? 'bg-white/15'
               : 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0',
@@ -711,7 +712,9 @@ function ReferencesControl() {
             aria-expanded={isOpen}
             aria-label="Reference settings"
             className={cn(
-              'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
+              vertical
+                ? 'absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-sm transition-colors'
+                : 'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
               anyVisible
                 ? isOpen
                   ? 'bg-white/10'
@@ -722,7 +725,12 @@ function ReferencesControl() {
             )}
             type="button"
           >
-            <ChevronDown className={cn('h-3 w-3 transition-transform', isOpen && 'rotate-180')} />
+            <ChevronDown
+              className={cn(
+                'h-3 w-3 transition-transform',
+                vertical ? '-rotate-90' : isOpen && 'rotate-180',
+              )}
+            />
           </button>
         </PopoverTrigger>
       </div>

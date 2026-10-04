@@ -25,7 +25,7 @@ import useEditor from '../../../store/use-editor'
 import useFloorplanMode from '../../../store/use-floorplan-mode'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
-import { useActionMenuPopupSide } from './placement'
+import { useActionMenuPopupSide, useActionMenuVertical } from './placement'
 
 const measurementOptions = [
   { kind: 'distance', label: 'Distance', icon: Ruler },
@@ -63,6 +63,7 @@ const constructionDimensionOptions = [
 
 export function MeasurementControl() {
   const popupSide = useActionMenuPopupSide()
+  const vertical = useActionMenuVertical()
   const [isOpen, setIsOpen] = useState(false)
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
@@ -148,12 +149,12 @@ export function MeasurementControl() {
 
   return (
     <Popover onOpenChange={setIsOpen} open={isOpen}>
-      <div className="flex items-center">
+      <div className={vertical ? 'relative' : 'flex items-center'}>
         <ActionButton
           aria-label={`Measure: ${selectedLabel}`}
           aria-pressed={isControlActive}
           className={cn(
-            'rounded-r-none p-0 text-muted-foreground',
+            vertical ? 'p-0 text-muted-foreground' : 'rounded-r-none p-0 text-muted-foreground',
             isControlActive
               ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20'
               : 'hover:bg-cyan-500/15 hover:text-cyan-400',
@@ -173,7 +174,9 @@ export function MeasurementControl() {
             aria-haspopup="menu"
             aria-label="Measurement options"
             className={cn(
-              'flex h-11 w-6 items-center justify-center rounded-r-lg text-muted-foreground transition-colors',
+              vertical
+                ? 'absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-sm transition-colors'
+                : 'flex h-11 w-6 items-center justify-center rounded-r-lg text-muted-foreground transition-colors',
               isOpen
                 ? 'bg-cyan-500/15 text-cyan-400'
                 : 'hover:bg-cyan-500/10 hover:text-cyan-400',
@@ -182,7 +185,10 @@ export function MeasurementControl() {
           >
             <ChevronDown
               aria-hidden="true"
-              className={cn('h-3 w-3 transition-transform', isOpen && 'rotate-180')}
+              className={cn(
+                'h-3 w-3 transition-transform',
+                vertical ? '-rotate-90' : isOpen && 'rotate-180',
+              )}
             />
           </button>
         </PopoverTrigger>
