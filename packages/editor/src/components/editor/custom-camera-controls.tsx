@@ -326,6 +326,8 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     right: false,
   })
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
+  // Swapped buttons pan on right-drag and rotate on middle-drag.
+  const buttonsSwapped = useEditor((s) => s.rightDragAction === 'pan')
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const allowUndergroundCamera = useEditor((s) => s.allowUndergroundCamera)
   const selection = useViewer((s) => s.selection)
@@ -674,11 +676,15 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
 
     return {
       left: isPreviewMode ? CameraControlsImpl.ACTION.SCREEN_PAN : CameraControlsImpl.ACTION.NONE,
-      middle: CameraControlsImpl.ACTION.SCREEN_PAN,
-      right: CameraControlsImpl.ACTION.ROTATE,
+      middle: buttonsSwapped
+        ? CameraControlsImpl.ACTION.ROTATE
+        : CameraControlsImpl.ACTION.SCREEN_PAN,
+      right: buttonsSwapped
+        ? CameraControlsImpl.ACTION.SCREEN_PAN
+        : CameraControlsImpl.ACTION.ROTATE,
       wheel: wheelAction,
     }
-  }, [cameraMode, isPreviewMode])
+  }, [buttonsSwapped, cameraMode, isPreviewMode])
 
   // Touch gestures (mobile / trackpad).
   // - One finger drag    → rotate by default (much easier on a phone), but
@@ -792,8 +798,12 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
           ? CameraControlsImpl.ACTION.ZOOM
           : CameraControlsImpl.ACTION.DOLLY
       controls.current.mouseButtons.wheel = wheelAction
-      controls.current.mouseButtons.middle = CameraControlsImpl.ACTION.SCREEN_PAN
-      controls.current.mouseButtons.right = CameraControlsImpl.ACTION.ROTATE
+      controls.current.mouseButtons.middle = buttonsSwapped
+        ? CameraControlsImpl.ACTION.ROTATE
+        : CameraControlsImpl.ACTION.SCREEN_PAN
+      controls.current.mouseButtons.right = buttonsSwapped
+        ? CameraControlsImpl.ACTION.SCREEN_PAN
+        : CameraControlsImpl.ACTION.ROTATE
       if (isPreviewMode) {
         // In preview mode, left-click is always pan (viewer-style)
         controls.current.mouseButtons.left = CameraControlsImpl.ACTION.SCREEN_PAN
@@ -929,6 +939,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     }
   }, [
     beginLocalCameraInteraction,
+    buttonsSwapped,
     cameraDraggingLifecycle,
     cameraMode,
     gl,

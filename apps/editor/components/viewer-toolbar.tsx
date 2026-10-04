@@ -10,7 +10,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-  type FloorplanRightDragAction,
+  type RightDragAction,
   useEditor,
   useFloorplanAnnotationVisibility,
   useFloorplanMode,
@@ -198,27 +198,27 @@ function ViewModeControl() {
           </ToolbarTooltip>
         )
       })}
-      {viewMode === '3d' ? null : <PlanDragControl />}
+      <DragControl />
     </div>
   )
 }
 
-const PLAN_DRAG_OPTIONS: { id: FloorplanRightDragAction; label: string }[] = [
+const DRAG_OPTIONS: { id: RightDragAction; label: string }[] = [
   { id: 'rotate', label: 'Right-drag rotates' },
   { id: 'pan', label: 'Right-drag moves, middle-drag rotates' },
 ]
 
-// What a right-button drag does in the 2D plan.
-function PlanDragControl() {
-  const action = useEditor((state) => state.floorplanRightDragAction)
-  const setAction = useEditor((state) => state.setFloorplanRightDragAction)
+// What a right-button drag does in the 3D and 2D views.
+function DragControl() {
+  const action = useEditor((state) => state.rightDragAction)
+  const setAction = useEditor((state) => state.setRightDragAction)
 
   return (
     <DropdownMenu>
-      <ToolbarTooltip label="2D navigation">
+      <ToolbarTooltip label="Mouse navigation">
         <DropdownMenuTrigger asChild>
           <button
-            aria-label="2D navigation"
+            aria-label="Mouse navigation"
             className={cn(TOOLBAR_BTN, 'w-6 border-border/40 border-l')}
             type="button"
           >
@@ -232,7 +232,7 @@ function PlanDragControl() {
         side="bottom"
         sideOffset={8}
       >
-        {PLAN_DRAG_OPTIONS.map((option) => (
+        {DRAG_OPTIONS.map((option) => (
           <DropdownMenuItem key={option.id} onSelect={() => setAction(option.id)}>
             <span>{option.label}</span>
             {action === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
