@@ -884,7 +884,10 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
 
     const onPointerDown = (event: PointerEvent) => {
       if (!(event.target instanceof Node) || !gl.domElement.contains(event.target)) return
-      if (event.button !== 1 && !(event.button === 0 && keyState.space)) return
+      // Right-drag (rotate or, swapped, pan) shows the grabbing hand too.
+      if (event.button !== 1 && event.button !== 2 && !(event.button === 0 && keyState.space)) {
+        return
+      }
 
       panPointerId = event.pointerId
       panPointerButton = event.button
@@ -916,8 +919,76 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       updateConfig()
     }
 
+    // Press-and-hold (~0.5s) the left mouse button on empty space in select
+    // mode pans, like space+drag. It flips left to SCREEN_PAN and re-dispatches
+    // the pointerdown so camera-controls starts the pan from the held point.
+    // Moving first, starting over a node, or losing focus cancels it.
+    const canvas = gl.domElement
+    const HOLD_MS = 500
+    const MOVE_TOL = 6
+    let holdTimer: ReturnType<typeof setTimeout> | null = null
+    let holdActive = false
+    let downX = 0
+    let downY = 0
+    const clearHoldTimer = () => {
+      if (holdTimer) {
+        clearTimeout(holdTimer)
+        holdTimer = null
+      }
+    }
+    const endHoldPan = () => {
+      clearHoldTimer()
+      if (!holdActive) return
+      holdActive = false
+      if (!keyState.space) document.body.style.cursor = ''
+      updateConfig()
+      useViewer.getState().setCameraDragging(false)
+    }
+    const onCanvasPointerDown = (e: PointerEvent) => {
+      if (e.button !== 0 || e.pointerType !== 'mouse') return
+      if (useEditor.getState().mode !== 'select') return
+      // The re-dispatched pointerdown re-enters here; don't re-arm.
+      if (holdActive || holdTimer != null) return
+      if (isPreviewMode || keyState.space) return
+      if (useViewer.getState().hoveredId != null) return
+      downX = e.clientX
+      downY = e.clientY
+      holdTimer = setTimeout(() => {
+        holdTimer = null
+        if (!controls.current) return
+        holdActive = true
+        controls.current.mouseButtons.left = CameraControlsImpl.ACTION.SCREEN_PAN
+        document.body.style.cursor = 'grabbing'
+        useViewer.getState().setCameraDragging(true)
+        canvas.dispatchEvent(
+          new PointerEvent('pointerdown', {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+            buttons: 1,
+            clientX: downX,
+            clientY: downY,
+            pointerId: e.pointerId,
+            pointerType: e.pointerType || 'mouse',
+            isPrimary: true,
+          }),
+        )
+      }, HOLD_MS)
+    }
+    const onCanvasPointerMove = (e: PointerEvent) => {
+      if (holdActive || holdTimer == null) return
+      if (Math.abs(e.clientX - downX) > MOVE_TOL || Math.abs(e.clientY - downY) > MOVE_TOL) {
+        clearHoldTimer()
+      }
+    }
+
+    window.addEventListener('blur', endHoldPan)
     document.addEventListener('keydown', onKeyDown)
     document.addEventListener('keyup', onKeyUp)
+    canvas.addEventListener('pointerdown', onCanvasPointerDown)
+    canvas.addEventListener('pointermove', onCanvasPointerMove)
+    window.addEventListener('pointerup', endHoldPan)
+    window.addEventListener('pointercancel', endHoldPan)
     window.addEventListener('pointerdown', onPointerDown, true)
     window.addEventListener('pointerup', onPointerUp, true)
     window.addEventListener('pointercancel', onPointerUp, true)
@@ -932,6 +1003,12 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       window.removeEventListener('pointerup', onPointerUp, true)
       window.removeEventListener('pointercancel', onPointerUp, true)
       window.removeEventListener('blur', onBlur)
+      canvas.removeEventListener('pointerdown', onCanvasPointerDown)
+      canvas.removeEventListener('pointermove', onCanvasPointerMove)
+      window.removeEventListener('pointerup', endHoldPan)
+      window.removeEventListener('pointercancel', endHoldPan)
+      window.removeEventListener('blur', endHoldPan)
+      endHoldPan()
       gl.domElement.removeEventListener('wheel', onWheel, true)
       clearKeyboardPanKeys(keyboardPanKeys.current)
       clearNavigationCursor()
