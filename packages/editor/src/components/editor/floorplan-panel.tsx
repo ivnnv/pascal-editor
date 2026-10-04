@@ -4955,6 +4955,15 @@ export function FloorplanPanel({
   const floorplanContentRef = useRef<SVGGElement>(null)
   const panStateRef = useRef<PanState | null>(null)
   const floorplanRotationStateRef = useRef<FloorplanRotationState | null>(null)
+  // Lets the hold-pan blur handler end an active pan.
+  const endFloorplanNavigationRef = useRef<(() => void) | null>(null)
+  // A left press on empty plan space that becomes a pan after a hold.
+  const floorplanHoldPanRef = useRef<{
+    pointerId: number
+    x: number
+    y: number
+    timer: ReturnType<typeof setTimeout>
+  } | null>(null)
   const pendingFloorplanRotationRestoreRef = useRef<FloorplanRotationState | null>(null)
   const floorplanSpacePanPressedRef = useRef(false)
   const floorplanNavigationClickSuppressedRef = useRef(false)
@@ -8892,8 +8901,83 @@ export function FloorplanPanel({
     }
   }, [setFloorplanHovered])
 
+  // A hold-pan arm ends on release or once the pointer moves first; losing
+  // focus also ends a pan the hold already started.
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const hold = floorplanHoldPanRef.current
+      if (!hold || e.pointerId !== hold.pointerId) return
+      if (Math.abs(e.clientX - hold.x) > 6 || Math.abs(e.clientY - hold.y) > 6) {
+        clearTimeout(hold.timer)
+        floorplanHoldPanRef.current = null
+      }
+    }
+    const onUp = () => {
+      const hold = floorplanHoldPanRef.current
+      if (!hold) return
+      clearTimeout(hold.timer)
+      floorplanHoldPanRef.current = null
+    }
+    const onBlur = () => {
+      onUp()
+      if (panStateRef.current) endFloorplanNavigationRef.current?.()
+    }
+    window.addEventListener('pointermove', onMove, true)
+    window.addEventListener('pointerup', onUp, true)
+    window.addEventListener('pointercancel', onUp, true)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('pointermove', onMove, true)
+      window.removeEventListener('pointerup', onUp, true)
+      window.removeEventListener('pointercancel', onUp, true)
+      window.removeEventListener('blur', onBlur)
+      onUp()
+    }
+  }, [])
+
   const handleNavigationPointerDown = useCallback(
     (event: ReactPointerEvent<SVGSVGElement>) => {
+      // In select mode, holding the left mouse button ~0.5s on empty space
+      // pans like a middle-drag; moving first or releasing cancels it.
+      if (
+        event.button === 0 &&
+        event.pointerType === 'mouse' &&
+        !floorplanSpacePanPressedRef.current &&
+        useEditor.getState().mode === 'select' &&
+        !(event.target instanceof Element && event.target.closest('[data-node-id]'))
+      ) {
+        if (floorplanHoldPanRef.current) clearTimeout(floorplanHoldPanRef.current.timer)
+        const svgEl = event.currentTarget
+        const { pointerId, clientX, clientY } = event
+        floorplanHoldPanRef.current = {
+          pointerId,
+          x: clientX,
+          y: clientY,
+          timer: setTimeout(() => {
+            floorplanHoldPanRef.current = null
+            const viewport = latestViewportRef.current ?? latestFittedViewportRef.current
+            if (!viewport) return
+            floorplanScreenSelectionRef.current = null
+            setPreviewSelectedIds([])
+            floorplanNavigationSyncScheduler.flush()
+            stopFloorplanViewAnimation()
+            floorplanNavigationClickSuppressedRef.current = true
+            floorplanViewportInteractionInProgressRef.current = true
+            panStateRef.current = {
+              pointerId,
+              clientX,
+              clientY,
+              centerSvg: { x: viewport.centerX, y: viewport.centerY },
+            }
+            setIsPanning(true)
+            setCursorPoint(null)
+            setFloorplanCursorPosition(null)
+            try {
+              svgEl.setPointerCapture(pointerId)
+            } catch {}
+          }, 500),
+        }
+      }
       // Swapped buttons: right-drag pans and middle-drag rotates.
       const swapped = useEditor.getState().rightDragAction === 'pan'
       const panButton = swapped ? 2 : 1
@@ -8975,6 +9059,7 @@ export function FloorplanPanel({
     },
     [
       commitFloorplanZoom,
+      setPreviewSelectedIds,
       buildingRotationDeg,
       floorplanNavigationSyncScheduler,
       setFloorplanCursorPosition,
@@ -9044,6 +9129,7 @@ export function FloorplanPanel({
     },
     [commitFloorplanPan, commitFloorplanRotation],
   )
+  endFloorplanNavigationRef.current = () => endFloorplanNavigation()
 
   const hoveredWallIdRef = useRef<string | null>(null)
   const hoveredCeilingIdRef = useRef<string | null>(null)
