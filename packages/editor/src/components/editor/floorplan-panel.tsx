@@ -8894,7 +8894,14 @@ export function FloorplanPanel({
 
   const handleNavigationPointerDown = useCallback(
     (event: ReactPointerEvent<SVGSVGElement>) => {
-      if (event.button === 1 || (event.button === 0 && floorplanSpacePanPressedRef.current)) {
+      // Swapped buttons: right-drag pans and middle-drag rotates.
+      const swapped = useEditor.getState().rightDragAction === 'pan'
+      const panButton = swapped ? 2 : 1
+      const rotateButton = swapped ? 1 : 2
+      if (
+        event.button === panButton ||
+        (event.button === 0 && floorplanSpacePanPressedRef.current)
+      ) {
         event.preventDefault()
         event.stopPropagation()
 
@@ -8922,7 +8929,7 @@ export function FloorplanPanel({
         return
       }
 
-      if (event.button !== 2) {
+      if (event.button !== rotateButton) {
         return
       }
 
