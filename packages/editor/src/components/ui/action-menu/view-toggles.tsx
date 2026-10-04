@@ -20,7 +20,7 @@ import { useUploadStore } from '../../../store/use-upload'
 import { SliderControl } from '../controls/slider-control'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
-import { useActionMenuArrowRotation, useActionMenuPopupSide, useActionMenuVertical } from './placement'
+import { useActionMenuArrowCorner, useActionMenuArrowRotation, useActionMenuPopupSide, useActionMenuVertical } from './placement'
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
 const ACCEPTED_FILE_TYPES = '.glb,.gltf,image/jpeg,image/png,image/webp,image/gif'
@@ -662,6 +662,7 @@ function ReferenceListSection({
 function ReferencesControl() {
   const popupSide = useActionMenuPopupSide()
   const vertical = useActionMenuVertical()
+  const arrowCorner = useActionMenuArrowCorner()
   const showScans = useViewer((state) => state.showScans)
   const setShowScans = useViewer((state) => state.setShowScans)
   const showGuides = useViewer((state) => state.showGuides)
@@ -714,7 +715,7 @@ function ReferencesControl() {
             aria-label="Reference settings"
             className={cn(
               vertical
-                ? 'absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-sm transition-colors'
+                ? `absolute top-0.5 ${arrowCorner} flex h-4 w-4 items-center justify-center rounded-sm transition-colors`
                 : 'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
               anyVisible
                 ? isOpen

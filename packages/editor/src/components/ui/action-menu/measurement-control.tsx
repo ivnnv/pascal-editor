@@ -25,7 +25,7 @@ import useEditor from '../../../store/use-editor'
 import useFloorplanMode from '../../../store/use-floorplan-mode'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
-import { useActionMenuArrowRotation, useActionMenuPopupSide, useActionMenuVertical } from './placement'
+import { useActionMenuArrowCorner, useActionMenuArrowRotation, useActionMenuPopupSide, useActionMenuVertical } from './placement'
 
 const measurementOptions = [
   { kind: 'distance', label: 'Distance', icon: Ruler },
@@ -64,6 +64,7 @@ const constructionDimensionOptions = [
 export function MeasurementControl() {
   const popupSide = useActionMenuPopupSide()
   const vertical = useActionMenuVertical()
+  const arrowCorner = useActionMenuArrowCorner()
   const [isOpen, setIsOpen] = useState(false)
   const arrowRotation = useActionMenuArrowRotation(isOpen)
   const mode = useEditor((state) => state.mode)
@@ -176,7 +177,7 @@ export function MeasurementControl() {
             aria-label="Measurement options"
             className={cn(
               vertical
-                ? 'absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-sm transition-colors'
+                ? `absolute top-0.5 ${arrowCorner} flex h-4 w-4 items-center justify-center rounded-sm transition-colors`
                 : 'flex h-11 w-6 items-center justify-center rounded-r-lg text-muted-foreground transition-colors',
               isOpen
                 ? 'bg-cyan-500/15 text-cyan-400'

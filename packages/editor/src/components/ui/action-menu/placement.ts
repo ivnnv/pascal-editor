@@ -25,6 +25,11 @@ export function useActionMenuVertical(): boolean {
   return placement === 'left' || placement === 'right'
 }
 
+/** Corner of a rail button that holds its split-button arrow: the side facing the viewer. */
+export function useActionMenuArrowCorner(): 'left-0.5' | 'right-0.5' {
+  return useActionMenuPlacement() === 'right' ? 'left-0.5' : 'right-0.5'
+}
+
 /** Rotation that points a split-button arrow toward where its popover opens. */
 export function useActionMenuArrowRotation(isOpen: boolean): string | false {
   const placement = useActionMenuPlacement()
