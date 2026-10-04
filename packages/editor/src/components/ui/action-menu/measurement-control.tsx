@@ -196,7 +196,7 @@ export function MeasurementControl() {
 
       <PopoverContent
         align="center"
-        className="max-h-[70vh] w-64 overflow-y-auto rounded-lg border-border/45 bg-background/96 p-2 shadow-elevation-3 backdrop-blur-xl"
+        className="max-h-[70vh] w-max min-w-40 overflow-y-auto rounded-lg border-border/45 bg-background/96 p-2 shadow-elevation-3 backdrop-blur-xl"
         side={popupSide}
         sideOffset={14}
       >
