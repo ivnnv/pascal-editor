@@ -19,6 +19,7 @@ import {
 import {
   CursorSphere,
   formatAngleRadians,
+  getActiveSnappingMode,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
   isAlignmentGuideActive,
@@ -41,6 +42,7 @@ import { Html } from '@react-three/drei'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
+import { snapWallEndpointToOrigin } from './move-shared'
 
 /**
  * Wall endpoint move tool (kind-owned).
@@ -448,6 +450,10 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
           )
       } else {
         useAlignmentGuides.getState().clear()
+      }
+      // The corner can always go back where it started, or keep its x / z line.
+      if (getActiveSnappingMode() !== 'off') {
+        alignedPoint = snapWallEndpointToOrigin(planPoint, alignedPoint, movingOriginalPoint)
       }
 
       if (
