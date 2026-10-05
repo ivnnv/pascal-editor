@@ -11,6 +11,9 @@ import { cn } from './../../../lib/utils'
 import useEditor from './../../../store/use-editor'
 import { CameraActions } from './camera-actions'
 import { ControlModes } from './control-modes'
+import { type ActionMenuPlacement, ActionMenuPlacementProvider } from './placement'
+// AIKAZA: user-facing placement picker
+import { PlacementControl } from './placement-control'
 import { SecondaryToggles } from './view-toggles'
 
 // Mobile bottom offset matches the viewer's overlap behind the sheet's
@@ -18,7 +21,16 @@ import { SecondaryToggles } from './view-toggles'
 // just above that strip instead of inside it.
 const MOBILE_BOTTOM_OFFSET = 24
 
-export function ActionMenu({ className }: { className?: string }) {
+export function ActionMenu({
+  className,
+  inline = false,
+  placement = 'bottom',
+}: {
+  className?: string
+  // Rendered in the flow of a layout slot instead of floating over the viewer.
+  inline?: boolean
+  placement?: ActionMenuPlacement
+}) {
   const isMobile = useIsMobile()
   const readOnly = useScene((s) => s.readOnly)
   const hasSelectionOnMobile = useViewer((s) => isMobile && s.selection.selectedIds.length > 0)
@@ -47,41 +59,65 @@ export function ActionMenu({ className }: { className?: string }) {
     ? { duration: 0 }
     : { type: 'spring' as const, bounce: 0.2, duration: 0.4 }
 
+  // Mobile keeps the bottom rail: the sheet owns the rest of the screen.
+  const effectivePlacement = isMobile ? 'bottom' : placement
+  const vertical = effectivePlacement === 'left' || effectivePlacement === 'right'
+
   return (
-    <TooltipProvider>
-      <motion.div
-        className={cn(
-          'left-1/2 z-50 -translate-x-1/2',
-          isMobile ? 'absolute origin-bottom scale-90' : 'fixed bottom-6',
-          'rounded-2xl border border-border bg-background/90 shadow-2xl backdrop-blur-md',
-          'transition-colors duration-200 ease-out',
-          className,
-        )}
-        layout
-        style={isMobile ? { bottom: MOBILE_BOTTOM_OFFSET } : undefined}
-        transition={transition}
-      >
-        {isMobile ? (
-          <div className="flex flex-col items-stretch gap-0.5 px-2 py-1.5">
-            {/* Row 1: control modes only */}
-            <div className="flex items-center justify-center gap-1">
+    <ActionMenuPlacementProvider value={effectivePlacement}>
+      <TooltipProvider>
+        <motion.div
+          className={cn(
+            'z-50',
+            isMobile
+              ? 'absolute left-1/2 origin-bottom -translate-x-1/2 scale-90'
+              : inline
+                ? 'relative'
+                : effectivePlacement === 'left'
+                  ? 'fixed top-1/2 left-4 -translate-y-1/2'
+                  : effectivePlacement === 'right'
+                    ? 'fixed top-1/2 right-4 -translate-y-1/2'
+                  : effectivePlacement === 'top'
+                    ? 'fixed top-3 left-1/2 -translate-x-1/2'
+                    : 'fixed bottom-6 left-1/2 -translate-x-1/2',
+            'rounded-2xl border border-border bg-background/90 shadow-2xl backdrop-blur-md',
+            'transition-colors duration-200 ease-out',
+            className,
+          )}
+          layout
+          style={isMobile ? { bottom: MOBILE_BOTTOM_OFFSET } : undefined}
+          transition={transition}
+        >
+          {isMobile ? (
+            <div className="flex flex-col items-stretch gap-0.5 px-2 py-1.5">
+              {/* Row 1: control modes only */}
+              <div className="flex items-center justify-center gap-1">
+                <ControlModes />
+              </div>
+              {/* Row 2: secondary toggles (orbit + top view hidden) */}
+              <div className="flex items-center justify-center gap-1 border-border/50 border-t pt-1">
+                <SecondaryToggles />
+              </div>
+            </div>
+          ) : (
+            <div
+              className={cn(
+                'flex items-center justify-center gap-1',
+                vertical ? 'flex-col px-1.5 py-2' : 'px-2 py-1.5',
+              )}
+            >
               <ControlModes />
-            </div>
-            {/* Row 2: secondary toggles (orbit + top view hidden) */}
-            <div className="flex items-center justify-center gap-1 border-border/50 border-t pt-1">
+              <div className={vertical ? 'my-1 h-px w-5 bg-border' : 'mx-1 h-5 w-px bg-border'} />
               <SecondaryToggles />
+              <div className={vertical ? 'my-1 h-px w-5 bg-border' : 'mx-1 h-5 w-px bg-border'} />
+              <CameraActions />
+              {/* AIKAZA: user-facing placement picker */}
+              <div className={vertical ? 'my-1 h-px w-5 bg-border' : 'mx-1 h-5 w-px bg-border'} />
+              <PlacementControl />
             </div>
-          </div>
-        ) : (
-          <div className="flex items-center justify-center gap-1 px-2 py-1.5">
-            <ControlModes />
-            <div className="mx-1 h-5 w-px bg-border" />
-            <SecondaryToggles />
-            <div className="mx-1 h-5 w-px bg-border" />
-            <CameraActions />
-          </div>
-        )}
-      </motion.div>
-    </TooltipProvider>
+          )}
+        </motion.div>
+      </TooltipProvider>
+    </ActionMenuPlacementProvider>
   )
 }
