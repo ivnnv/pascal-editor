@@ -46,6 +46,23 @@ export function getWallMoveAlignTargets(
 }
 
 /**
+ * Lets a dragged wall corner land back on where it started, or stay on its
+ * starting x / z line, when the raw cursor is within the align tolerance.
+ */
+export function snapWallEndpointToOrigin(
+  rawPoint: WallPlanPoint,
+  snappedPoint: WallPlanPoint,
+  origin: WallPlanPoint,
+): WallPlanPoint {
+  const nearX = Math.abs(rawPoint[0] - origin[0]) <= WALL_MOVE_ALIGN_TOLERANCE
+  const nearZ = Math.abs(rawPoint[1] - origin[1]) <= WALL_MOVE_ALIGN_TOLERANCE
+  if (nearX && nearZ) return [origin[0], origin[1]]
+  if (nearX) return [origin[0], snappedPoint[1]]
+  if (nearZ) return [snappedPoint[0], origin[1]]
+  return snappedPoint
+}
+
+/**
  * Snaps a projection onto the nearest alignment target within
  * `WALL_MOVE_ALIGN_TOLERANCE`, else onto the grid (`gridStep <= 0` keeps it raw).
  */
