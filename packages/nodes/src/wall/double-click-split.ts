@@ -28,21 +28,34 @@ export function installWallDoubleClickSplit() {
 
 function onDoubleClick(event: MouseEvent) {
   const surface = document.querySelector<SVGGElement>('g[data-floorplan-scene]')?.ownerSVGElement
-  if (!surface || !isOverPlan(surface, event)) return
+  if (!surface || !isOverPlan(surface, event) || !canEditByHand()) return
   const selected = useViewer.getState().selection.selectedIds
   const wall = selected.length === 1 ? useScene.getState().nodes[selected[0] as AnyNodeId] : null
   if (wall?.type !== 'wall') return
   const point = clientToPlan(event.clientX, event.clientY)
   if (!point) return
   const distance = wallSplitDistance(wall, point)
-  const onStroke = isOnWallStroke(wall, distance, point, metresPerPixel(surface))
-  if (!onStroke) return
-  const split = splitWallAt(wall, distance)
-  if (!split) return
+  if (!isOnWallStroke(wall, distance, point, metresPerPixel(surface))) return
+  // Alt places the cut without snapping, as in the Split tool.
+  if (!splitWallAt(wall, distance, event.altKey)) return
   // The first click may have opened the length input; the split closes it.
   if (isInLengthInput(event.target)) (event.target as HTMLElement).blur()
   event.preventDefault()
   event.stopPropagation()
+}
+
+// The same gate as editing a length in the plan, and nothing else in progress.
+function canEditByHand(): boolean {
+  const editor = useEditor.getState()
+  return (
+    editor.workspaceMode === 'edit' &&
+    editor.mode === 'select' &&
+    !editor.isPreviewMode &&
+    !editor.isCaptureMode &&
+    !editor.isFirstPersonMode &&
+    !useScene.getState().readOnly &&
+    useInteractionScope.getState().scope.kind === 'idle'
+  )
 }
 
 function isInLengthInput(target: EventTarget | null): boolean {
@@ -66,8 +79,10 @@ function isOverPlan(surface: SVGSVGElement, event: MouseEvent): boolean {
 }
 
 function metresPerPixel(surface: SVGSVGElement): number {
-  const scale = surface.querySelector<SVGGElement>('g[data-floorplan-scene]')?.getScreenCTM()?.a
-  return scale ? 1 / Math.abs(scale) : 0.01
+  // The column length is the scale whatever the plan's rotation.
+  const ctm = surface.querySelector<SVGGElement>('g[data-floorplan-scene]')?.getScreenCTM()
+  const scale = ctm ? Math.hypot(ctm.a, ctm.b) : 0
+  return scale > 0 ? 1 / scale : 0.01
 }
 
 function isOnWallStroke(

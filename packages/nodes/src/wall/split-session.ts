@@ -167,17 +167,20 @@ export function commitWallSplit() {
 }
 
 /**
- * Cuts `wall` in two at `raw` metres along it, snapped like the split tool, as
- * one undo step. Returns false when that cut is not allowed (too close to an end).
+ * Cuts `wall` in two at `raw` metres along it, snapped like the split tool
+ * unless `free` (Alt), as one undo step. Returns false when that cut is not
+ * allowed (too close to an end).
  */
-export function splitWallAt(wall: WallNode, raw: number): boolean {
+export function splitWallAt(wall: WallNode, raw: number, free = false): boolean {
   const current = useScene.getState()
   if (current.readOnly) return false
-  const { distance } = snapWallSplitDistance(wall, raw, {
-    gridStep: isGridSnapActive() ? useEditor.getState().gridSnapStep : null,
-    anchors: isMagneticSnapActive() ? wallSplitAnchors(current.nodes, wall) : null,
-    tolerance: ALIGNMENT_TOLERANCE,
-  })
+  const distance = free
+    ? raw
+    : snapWallSplitDistance(wall, raw, {
+        gridStep: isGridSnapActive() ? useEditor.getState().gridSnapStep : null,
+        anchors: isMagneticSnapActive() ? wallSplitAnchors(current.nodes, wall) : null,
+        tolerance: ALIGNMENT_TOLERANCE,
+      }).distance
   const preview = wallSplitPreview(
     current.nodes,
     wall,
