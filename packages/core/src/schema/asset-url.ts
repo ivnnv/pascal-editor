@@ -38,6 +38,8 @@ function isAllowedAssetUrl(url: string): boolean {
   if (/^artifact:\/\/[0-9a-f]{64}$/.test(url)) return true // content-addressed artifact
   if (url.startsWith('blob:')) return true // in-memory reference
   if (url.startsWith('data:image/')) return true // inline image only (never data:text/html)
+  // `//host` and `/\host` resolve to another origin, not an app path.
+  if (url.startsWith('//') || url.startsWith('/\\')) return false
   if (url.startsWith('/')) return true // app-relative path
   try {
     const parsed = new URL(url)
