@@ -165,3 +165,29 @@ export function commitWallSplit() {
   triggerSFX('sfx:structure-build')
   completeElementAction(from)
 }
+
+/**
+ * Cuts `wall` in two at `raw` metres along it, snapped like the split tool, as
+ * one undo step. Returns false when that cut is not allowed (too close to an end).
+ */
+export function splitWallAt(wall: WallNode, raw: number): boolean {
+  const current = useScene.getState()
+  if (current.readOnly) return false
+  const { distance } = snapWallSplitDistance(wall, raw, {
+    gridStep: isGridSnapActive() ? useEditor.getState().gridSnapStep : null,
+    anchors: isMagneticSnapActive() ? wallSplitAnchors(current.nodes, wall) : null,
+    tolerance: ALIGNMENT_TOLERANCE,
+  })
+  const preview = wallSplitPreview(
+    current.nodes,
+    wall,
+    wallSplitDistances(getWallCurveLength(wall), 1, distance),
+  )
+  if (!preview.valid) return false
+  const from = captureElementActionOrigin([wall.id])
+  const plan = planWallDivisions(current.nodes, wall.id, preview.distances)
+  runAsSingleSceneHistoryStep(useScene, () => current.applyNodeChanges(plan.changes))
+  triggerSFX('sfx:structure-build')
+  completeElementAction(from)
+  return true
+}

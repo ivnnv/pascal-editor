@@ -18,6 +18,7 @@ import {
 } from '@pascal-app/editor'
 import { buildWallContextualDimensions } from './contextual-dimensions'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
+import { installWallDoubleClickSplit } from './double-click-split'
 import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
 import {
   wallCurveAffordance,
@@ -65,6 +66,8 @@ const whenWallVariant = (variant: WallDrawVariant) => ({
   subscribe: (onChange: () => void) => useEditor.subscribe(onChange),
   value: () => getWallDrawVariant() === variant,
 })
+
+installWallDoubleClickSplit()
 
 export const wallDefinition: NodeDefinition<typeof WallNode> = {
   kind: 'wall',
