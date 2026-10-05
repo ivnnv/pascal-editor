@@ -98,6 +98,12 @@ function collectQuickActionNodes(
   return collectQuickActionNodeScope(nodes, selectedId, def.quickActionNodeScope)
 }
 
+// About half the wall action menu's width, its gap above the anchor, and the
+// clearance it keeps over a corner handle, in px.
+const MENU_HALF_WIDTH_PX = 110
+const MENU_GAP_PX = 32
+const CORNER_CLEARANCE_PX = 14
+
 /**
  * Floating Move / Duplicate / Delete buttons that appear above the
  * selected registered kind in the floor plan view.
@@ -214,7 +220,19 @@ export function FloorplanRegistryActionMenu() {
         midPt.x = planMid.x
         midPt.y = planMid.y
         const midScreen = midPt.matrixTransform(ctm)
-        setPosition({ left: midScreen.x, top: midScreen.y })
+        // Rise above a corner handle that sits under the menu (a short or
+        // vertical wall at low zoom), so the menu never covers it.
+        let top = midScreen.y
+        for (const [x, y] of [wall.start, wall.end]) {
+          const cornerPt = svgEl.createSVGPoint()
+          cornerPt.x = x
+          cornerPt.y = y
+          const corner = cornerPt.matrixTransform(ctm)
+          if (Math.abs(corner.x - midScreen.x) <= MENU_HALF_WIDTH_PX) {
+            top = Math.min(top, corner.y - CORNER_CLEARANCE_PX + MENU_GAP_PX)
+          }
+        }
+        setPosition({ left: midScreen.x, top })
         return
       }
 
@@ -389,7 +407,7 @@ export function FloorplanRegistryActionMenu() {
       style={{
         left: position.left,
         top: position.top,
-        transform: 'translate(-50%, calc(-100% - 32px))',
+        transform: `translate(-50%, calc(-100% - ${MENU_GAP_PX}px))`,
       }}
     >
       <NodeActionMenu
