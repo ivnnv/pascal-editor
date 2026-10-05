@@ -6,7 +6,7 @@ import {
   useScene,
   type WallNode,
 } from '@pascal-app/core'
-import { clientToPlan } from '@pascal-app/editor'
+import { clientToPlan, useEditor, useInteractionScope } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { wallSplitDistance } from './split-preview'
 import { splitWallAt } from './split-session'
