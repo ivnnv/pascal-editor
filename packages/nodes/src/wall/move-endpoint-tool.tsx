@@ -451,8 +451,9 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       } else {
         useAlignmentGuides.getState().clear()
       }
-      // The corner can always go back where it started, or keep its x / z line.
-      if (getActiveSnappingMode() !== 'off') {
+      // The corner can always go back where it started, or keep its x / z line,
+      // unless it is joining another wall.
+      if (getActiveSnappingMode() !== 'off' && !snapResult.snap) {
         alignedPoint = snapWallEndpointToOrigin(planPoint, alignedPoint, movingOriginalPoint)
       }
 
