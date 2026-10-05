@@ -10,6 +10,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  type RightDragAction,
   useEditor,
   useFloorplanAnnotationVisibility,
   useFloorplanMode,
@@ -26,6 +27,7 @@ import {
 import {
   Box,
   Check,
+  ChevronDown,
   ChevronsLeft,
   ChevronsRight,
   Columns2,
@@ -196,7 +198,48 @@ function ViewModeControl() {
           </ToolbarTooltip>
         )
       })}
+      <DragControl />
     </div>
+  )
+}
+
+const DRAG_OPTIONS: { id: RightDragAction; label: string }[] = [
+  { id: 'rotate', label: 'Right-drag rotates' },
+  { id: 'pan', label: 'Right-drag moves, middle-drag rotates' },
+]
+
+// What a right-button drag does in the 3D and 2D views.
+function DragControl() {
+  const action = useEditor((state) => state.rightDragAction)
+  const setAction = useEditor((state) => state.setRightDragAction)
+
+  return (
+    <DropdownMenu>
+      <ToolbarTooltip label="Mouse navigation">
+        <DropdownMenuTrigger asChild>
+          <button
+            aria-label="Mouse navigation"
+            className={cn(TOOLBAR_BTN, 'w-6 border-border/40 border-l')}
+            type="button"
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+      </ToolbarTooltip>
+      <DropdownMenuContent
+        align="start"
+        className={SUBMENU_CONTENT_CLASS}
+        side="bottom"
+        sideOffset={8}
+      >
+        {DRAG_OPTIONS.map((option) => (
+          <DropdownMenuItem key={option.id} onSelect={() => setAction(option.id)}>
+            <span>{option.label}</span>
+            {action === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

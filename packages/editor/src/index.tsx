@@ -870,6 +870,7 @@ export type {
   CaptureMode,
   FloorplanSelectionTool,
   Mode,
+  RightDragAction,
   SnapshotCropMode,
   SnapshotStandardAspect,
   SplitOrientation,
