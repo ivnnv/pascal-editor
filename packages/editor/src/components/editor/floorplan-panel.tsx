@@ -142,6 +142,7 @@ import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-st
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useDrawingView from '../../store/use-drawing-view'
 import type { GuideUiState, NavigationSyncPose } from '../../store/use-editor'
+import useFloorplanPreferences from '../../store/use-floorplan-preferences'
 import useEditor, {
   isAngleSnapActive,
   isMagneticSnapActive,
@@ -7436,6 +7437,14 @@ export function FloorplanPanel({
     smoothFloorplanNavigationView(localCenter, nextUserRotationDeg, currentViewport.width)
     publishFloorplanNavigationPose(localCenter, nextUserRotationDeg, currentViewport.width)
   }, [buildingRotationDeg, publishFloorplanNavigationPose, smoothFloorplanNavigationView])
+
+  // The first time the plan shows, turn it north-up when the user asked for that.
+  const startOrientationAppliedRef = useRef(false)
+  useEffect(() => {
+    if (startOrientationAppliedRef.current || !isFloorplanOpen || !viewport) return
+    startOrientationAppliedRef.current = true
+    if (useFloorplanPreferences.getState().startNorthUp) alignFloorplanViewToNorth()
+  }, [alignFloorplanViewToNorth, isFloorplanOpen, viewport])
 
   const clearGuideInteraction = useCallback(() => {
     guideInteractionRef.current = null
