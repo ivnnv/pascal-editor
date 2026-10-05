@@ -83,3 +83,8 @@ test('a corner dragged sideways keeps its z', () => {
 test('a corner dragged away from both lines follows the snap pipeline', () => {
   expect(snapWallEndpointToOrigin([6.2, 3.9], [6.0, 4.0], CORNER)).toEqual([6.0, 4.0])
 })
+
+test('in Smart mode the grid only pulls a moved wall when it is close', () => {
+  expect(snapWallMoveProjection(3.62, [], 0.5, true)).toBe(3.62)
+  expect(snapWallMoveProjection(3.96, [], 0.5, true)).toBe(4)
+})

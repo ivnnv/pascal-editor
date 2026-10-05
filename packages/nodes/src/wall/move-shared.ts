@@ -11,7 +11,7 @@ import {
   type WallPlanPoint,
   WallNode as WallSchema,
 } from '@pascal-app/core'
-import { isSegmentLongEnough, snapScalarToGrid } from '@pascal-app/editor'
+import { isSegmentLongEnough, snapScalarToGrid, softSnapScalar } from '@pascal-app/editor'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 /**
@@ -65,11 +65,13 @@ export function snapWallEndpointToOrigin(
 /**
  * Snaps a projection onto the nearest alignment target within
  * `WALL_MOVE_ALIGN_TOLERANCE`, else onto the grid (`gridStep <= 0` keeps it raw).
+ * `softGrid` (Smart mode) only pulls onto a grid line when it is close.
  */
 export function snapWallMoveProjection(
   rawProjection: number,
   alignTargets: readonly number[],
   gridStep: number,
+  softGrid = false,
 ): number {
   let best: number | null = null
   let bestDistance = WALL_MOVE_ALIGN_TOLERANCE
@@ -80,7 +82,9 @@ export function snapWallMoveProjection(
       bestDistance = distance
     }
   }
-  return best ?? snapScalarToGrid(rawProjection, gridStep)
+  if (best !== null) return best
+  const gridValue = snapScalarToGrid(rawProjection, gridStep)
+  return softGrid ? softSnapScalar(rawProjection, gridValue) : gridValue
 }
 
 export function samePoint(a: WallPlanPoint, b: WallPlanPoint) {

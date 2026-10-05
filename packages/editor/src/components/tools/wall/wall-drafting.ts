@@ -12,7 +12,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import { resolveSnapFlags } from '../../../lib/snapping-mode'
+import { resolveSnapFlags, SMART_ANGLE_TOLERANCE, softSnapScalar } from '../../../lib/snapping-mode'
 import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
 import {
   distanceSquared,
@@ -119,6 +119,38 @@ type SnapWallDraftArgs = {
   snapRadii?: WallSnapRadii
 }
 
+const SMART_ANGLE_STEP = Math.PI / 4
+
+/**
+ * Smart-mode placement: on a 0/45/90 ray from `start` when the segment is
+ * within a few degrees of it (its length pulled onto the grid when close),
+ * otherwise each coordinate pulled onto a grid line only when close.
+ */
+export function snapSmartDraftPoint(
+  point: WallPlanPoint,
+  start: WallPlanPoint | undefined,
+  step: number,
+  gridSnap?: (point: WallPlanPoint) => WallPlanPoint,
+): WallPlanPoint {
+  if (start) {
+    const dx = point[0] - start[0]
+    const dz = point[1] - start[1]
+    if (dx !== 0 || dz !== 0) {
+      const angle = Math.atan2(dz, dx)
+      const rayAngle = Math.round(angle / SMART_ANGLE_STEP) * SMART_ANGLE_STEP
+      if (Math.abs(angle - rayAngle) <= SMART_ANGLE_TOLERANCE) {
+        const dirX = Math.cos(rayAngle)
+        const dirZ = Math.sin(rayAngle)
+        const along = dx * dirX + dz * dirZ
+        const length = step > 0 ? softSnapScalar(along, Math.round(along / step) * step) : along
+        return [start[0] + dirX * length, start[1] + dirZ * length]
+      }
+    }
+  }
+  const grid = gridSnap ? gridSnap(point) : snapPointToGrid(point, step)
+  return [softSnapScalar(point[0], grid[0]), softSnapScalar(point[1], grid[1])]
+}
+
 export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSnapResult {
   const {
     point,
@@ -147,12 +179,16 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
   // The angle path snaps the distance ALONG the 15° ray — a scalar, the
   // same in world and local frames — so the `gridSnap` world-grid override
   // only applies when the angle lock is off.
+  // Smart mode pulls onto 0/45/90 and grid lines only when close, so a drag can
+  // still make small moves; the exclusive modes snap hard.
   const basePoint: WallPlanPoint =
-    start && angleSnap
-      ? [...snapPointAlongAngleRay(start, point, DEFAULT_ANGLE_STEP, step)]
-      : gridSnap
-        ? gridSnap(point)
-        : snapPointToGrid(point, step)
+    getActiveSnappingMode() === 'smart'
+      ? snapSmartDraftPoint(point, start && angleSnap ? start : undefined, step, gridSnap)
+      : start && angleSnap
+        ? [...snapPointAlongAngleRay(start, point, DEFAULT_ANGLE_STEP, step)]
+        : gridSnap
+          ? gridSnap(point)
+          : snapPointToGrid(point, step)
 
   if (magnetic) {
     const wallSnap = findWallSnapTarget(basePoint, walls, {

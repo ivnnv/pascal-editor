@@ -197,7 +197,12 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
         const snappedProj =
           getActiveSnappingMode() === 'off'
             ? rawProj
-            : snapWallMoveProjection(rawProj, alignTargets, step)
+            : snapWallMoveProjection(
+                rawProj,
+                alignTargets,
+                step,
+                getActiveSnappingMode() === 'smart',
+              )
         const perpDelta = snappedProj - originalProj
         dx = moveAxis[0] * perpDelta
         dz = moveAxis[1] * perpDelta

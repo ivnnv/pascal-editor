@@ -52,6 +52,17 @@ export function resolveSnapFlags(mode: SnappingMode): SnapFlags {
   }
 }
 
+/** In Smart mode a snap only pulls within this distance (m) of its target. */
+export const SMART_SNAP_TOLERANCE = 0.08
+
+/** In Smart mode a segment only locks to 0/45/90 within this angle (rad). */
+export const SMART_ANGLE_TOLERANCE = (4 * Math.PI) / 180
+
+/** Smart-mode soft snap: `snapped` when within the tolerance of `raw`, else `raw`. */
+export function softSnapScalar(raw: number, snapped: number): number {
+  return Math.abs(snapped - raw) <= SMART_SNAP_TOLERANCE ? snapped : raw
+}
+
 const SNAPPING_MODE_LABELS: Record<SnappingMode, string> = {
   grid: 'Grid',
   smart: 'Smart',
