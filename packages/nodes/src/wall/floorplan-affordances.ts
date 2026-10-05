@@ -16,6 +16,7 @@ import {
 } from '@pascal-app/core'
 import {
   alignFloorplanDraftPoint,
+  getActiveSnappingMode,
   getSegmentGridStep,
   isAlignmentGuideActive,
   isAngleSnapActive,
@@ -28,6 +29,7 @@ import {
   useAlignmentGuides,
   type WallPlanPoint,
 } from '@pascal-app/editor'
+import { snapWallEndpointToOrigin } from './move-shared'
 
 /**
  * Floor-plan 2D drag affordances for wall.
@@ -289,9 +291,14 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           excludeIds: staleWallIds,
           levelId: parentId,
         }) as WallPlanPoint
+        // The corner can always go back where it started, or keep its x / z line.
+        const placed =
+          getActiveSnappingMode() === 'off'
+            ? aligned
+            : snapWallEndpointToOrigin(planPoint as WallPlanPoint, aligned, movingOriginal)
 
-        const primaryStart: WallPlanPoint = endpoint === 'start' ? aligned : fixedPoint
-        const primaryEnd: WallPlanPoint = endpoint === 'end' ? aligned : fixedPoint
+        const primaryStart: WallPlanPoint = endpoint === 'start' ? placed : fixedPoint
+        const primaryEnd: WallPlanPoint = endpoint === 'end' ? placed : fixedPoint
 
         // ALT detaches: the linked walls keep their original endpoints,
         // and only the dragged wall moves.

@@ -5,12 +5,13 @@ import {
   resolveMaterial,
   type SceneMaterialId,
   useScene,
+  type WallMoveAxis,
   type WallMoveBridgePlan,
   type WallNode,
   type WallPlanPoint,
   WallNode as WallSchema,
 } from '@pascal-app/core'
-import { isSegmentLongEnough } from '@pascal-app/editor'
+import { isSegmentLongEnough, snapScalarToGrid } from '@pascal-app/editor'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 /**
@@ -22,6 +23,65 @@ import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
  */
 
 const POINT_EPSILON = 1e-6
+
+/** How close (m) a sideways wall drag must get to an alignment line to snap onto it. */
+export const WALL_MOVE_ALIGN_TOLERANCE = 0.1
+
+/**
+ * Positions along `axis` a sideways wall drag aligns to: the wall's own
+ * starting line, plus the line through every endpoint of the other walls.
+ */
+export function getWallMoveAlignTargets(
+  originalProjection: number,
+  axis: WallMoveAxis,
+  otherWalls: ReadonlyArray<Pick<WallNode, 'start' | 'end'>>,
+): number[] {
+  const targets = [originalProjection]
+  for (const wall of otherWalls) {
+    for (const point of [wall.start, wall.end]) {
+      targets.push(point[0] * axis[0] + point[1] * axis[1])
+    }
+  }
+  return targets
+}
+
+/**
+ * Lets a dragged wall corner land back on where it started, or stay on its
+ * starting x / z line, when the raw cursor is within the align tolerance.
+ */
+export function snapWallEndpointToOrigin(
+  rawPoint: WallPlanPoint,
+  snappedPoint: WallPlanPoint,
+  origin: WallPlanPoint,
+): WallPlanPoint {
+  const nearX = Math.abs(rawPoint[0] - origin[0]) <= WALL_MOVE_ALIGN_TOLERANCE
+  const nearZ = Math.abs(rawPoint[1] - origin[1]) <= WALL_MOVE_ALIGN_TOLERANCE
+  if (nearX && nearZ) return [origin[0], origin[1]]
+  if (nearX) return [origin[0], snappedPoint[1]]
+  if (nearZ) return [snappedPoint[0], origin[1]]
+  return snappedPoint
+}
+
+/**
+ * Snaps a projection onto the nearest alignment target within
+ * `WALL_MOVE_ALIGN_TOLERANCE`, else onto the grid (`gridStep <= 0` keeps it raw).
+ */
+export function snapWallMoveProjection(
+  rawProjection: number,
+  alignTargets: readonly number[],
+  gridStep: number,
+): number {
+  let best: number | null = null
+  let bestDistance = WALL_MOVE_ALIGN_TOLERANCE
+  for (const target of alignTargets) {
+    const distance = Math.abs(rawProjection - target)
+    if (distance <= bestDistance) {
+      best = target
+      bestDistance = distance
+    }
+  }
+  return best ?? snapScalarToGrid(rawProjection, gridStep)
+}
 
 export function samePoint(a: WallPlanPoint, b: WallPlanPoint) {
   return Math.abs(a[0] - b[0]) <= POINT_EPSILON && Math.abs(a[1] - b[1]) <= POINT_EPSILON
