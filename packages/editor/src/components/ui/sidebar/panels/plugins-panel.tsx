@@ -7,6 +7,7 @@ import { lazy, type ReactNode, Suspense, useState, useSyncExternalStore } from '
 import { editorHostPanelRegistry, pluginInstallLocks } from '../../../../lib/plugin-panels'
 import { IconRefImage } from '../../icon-ref'
 import { Button } from '../../primitives/button'
+import { ScrollArea } from '../../primitives/scroll-area'
 
 const PLUGIN_AUTHORING_URL =
   'https://editor.pascal.app/docs/developers/plugins'
@@ -73,7 +74,7 @@ export function PluginsPanel() {
     const lock = installed ? undefined : installLocks[pluginId]
 
     return (
-      <div className="flex h-full flex-col overflow-y-auto p-4">
+      <ScrollArea className="h-full" contentClassName="flex flex-col p-4">
         <div>
           <Button
             className="rounded-full"
@@ -185,12 +186,12 @@ export function PluginsPanel() {
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
         </div>
-      </div>
+      </ScrollArea>
     )
   }
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-4">
+    <ScrollArea className="h-full" contentClassName="flex flex-col p-4">
       <div className="mb-5">
         <h2 className="font-semibold text-lg text-sidebar-foreground">Plugins</h2>
         <p className="mt-1 text-sidebar-foreground/60 text-sm">
@@ -246,6 +247,6 @@ export function PluginsPanel() {
           <ExternalLink className="h-3.5 w-3.5" />
         </a>
       </div>
-    </div>
+    </ScrollArea>
   )
 }
