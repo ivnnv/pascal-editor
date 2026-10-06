@@ -77,6 +77,8 @@ export type FloorplanNodeExtension<N extends AnyNode = AnyNode> = {
    * that name (the 2D sibling of `def.affordanceTools[reshape]`).
    */
   reshapeLayers?: Record<string, () => Promise<{ default: ComponentType<FloorplanToolContext> }>>
+  /** A plan layer mounted while a node of this kind is the only one selected, in select mode. */
+  selectionLayer?: () => Promise<{ default: ComponentType<FloorplanToolContext> }>
   /**
    * Nodes the plan treats as one with this node when toggling it out of a
    * selection (a slab and its ceiling share an outline and a click).
