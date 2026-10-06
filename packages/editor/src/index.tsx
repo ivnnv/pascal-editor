@@ -298,6 +298,7 @@ export {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from './components/ui/primitives/dropdown-menu'
+export { ScrollArea } from './components/ui/primitives/scroll-area'
 export {
   ShortcutToken,
   shortcutDisplayValue,

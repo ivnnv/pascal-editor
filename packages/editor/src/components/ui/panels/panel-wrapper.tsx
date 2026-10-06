@@ -27,6 +27,7 @@ import {
   useState,
 } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
+import { clamp, DRAG_MARGIN, getDragBounds, usePanelDrag } from '../../../hooks/use-panel-drag'
 import { IconRefImage } from '../icon-ref'
 import {
   resolveActiveExtension,
@@ -34,38 +35,14 @@ import {
   toggleExtension,
 } from '../../../lib/inspector-card-mode'
 import { cn } from '../../../lib/utils'
-import { useInspectorExpanded } from '../../../lib/inspector-expanded'
+import { useInspectorExpanded, useInspectorHeight } from '../../../lib/inspector-expanded'
 import { PanelSection } from '../controls/panel-section'
 import { ErrorBoundary } from '../primitives/error-boundary'
+import { ScrollArea } from '../primitives/scroll-area'
 import { useInRightStack } from '../right-stack'
 
-const DRAG_MARGIN = 8
-// Pointer travel (px) below which a header press is treated as a click
-// (toggles collapse) rather than a drag.
-const CLICK_SLOP = 4
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), Math.max(min, max))
-}
-
-/**
- * Bounds the panel is allowed to occupy — the viewer column (tagged with
- * `data-viewer-bounds`) so it can't slide under the sidebar or top bar.
- * Falls back to the viewport when the marker isn't found.
- */
-function getDragBounds(el: HTMLElement | null): {
-  left: number
-  top: number
-  right: number
-  bottom: number
-} {
-  const region = el?.closest('[data-viewer-bounds]')
-  const rect = region?.getBoundingClientRect()
-  if (!rect) {
-    return { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
-  }
-  return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }
-}
+// Body height (px) a resized inspector keeps under its header.
+const MIN_BODY_HEIGHT = 80
 
 /**
  * Host-supplied inspector footer (e.g. community's "Save as preset"). The
@@ -175,83 +152,51 @@ export function PanelWrapper({
     if (collapsed) setActiveExtensionId(null)
   }, [collapsed])
 
+
   // Drag-to-reposition from the header. `offset` is a translation applied on
   // top of the default `top-20 right-4` anchor; null until first dragged.
-  // Dragging is clamped so no edge of the panel leaves the viewport.
   const [offset, setOffset] = useState<{ x: number; y: number } | null>(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const dragRef = useRef<{
-    startX: number
-    startY: number
-    baseX: number
-    baseY: number
-    rectLeft: number
-    rectTop: number
-    width: number
-    height: number
-    minLeft: number
-    maxLeft: number
-    minTop: number
-    maxTop: number
-    moved: boolean
-  } | null>(null)
+  const { drag, isDragging, onPointerDown: handleHeaderPointerDown } = usePanelDrag(panelRef, {
+    // A press that never turned into a drag is a click: the chevron's toggle.
+    onClick: handleCardToggle,
+    onEnd: (end) => setOffset((prev) => ({ x: (prev?.x ?? 0) + end.dx, y: (prev?.y ?? 0) + end.dy })),
+  })
+  const shown = drag
+    ? { x: (offset?.x ?? 0) + drag.dx, y: (offset?.y ?? 0) + drag.dy }
+    : offset
 
-  const handleHeaderPointerDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      // Buttons (close / reset / collapse) and a title edited in place handle their own clicks.
-      if ((e.target as HTMLElement).closest('button, input, label')) return
-      const rect = panelRef.current?.getBoundingClientRect()
-      if (!rect) return
-      const bounds = getDragBounds(panelRef.current)
-      const base = offset ?? { x: 0, y: 0 }
-      dragRef.current = {
-        startX: e.clientX,
-        startY: e.clientY,
-        baseX: base.x,
-        baseY: base.y,
-        rectLeft: rect.left,
-        rectTop: rect.top,
-        width: rect.width,
-        height: rect.height,
-        minLeft: bounds.left + DRAG_MARGIN,
-        maxLeft: bounds.right - rect.width - DRAG_MARGIN,
-        minTop: bounds.top + DRAG_MARGIN,
-        maxTop: bounds.bottom - rect.height - DRAG_MARGIN,
-        moved: false,
-      }
-      setIsDragging(true)
-      e.currentTarget.setPointerCapture(e.pointerId)
-    },
-    [offset],
-  )
-
-  const handleHeaderPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current
-    if (!drag) return
-    const dx = e.clientX - drag.startX
-    const dy = e.clientY - drag.startY
-    // Hold position until the press clearly becomes a drag, so a click can
-    // still toggle collapse.
-    if (!drag.moved && Math.hypot(dx, dy) <= CLICK_SLOP) return
-    drag.moved = true
-    const left = clamp(drag.rectLeft + dx, drag.minLeft, drag.maxLeft)
-    const top = clamp(drag.rectTop + dy, drag.minTop, drag.maxTop)
-    setOffset({ x: drag.baseX + (left - drag.rectLeft), y: drag.baseY + (top - drag.rectTop) })
+  // Height dragged from the bottom edge, one for every inspector like the
+  // expanded choice. The CSS max height still caps it to the room it has.
+  const height = useInspectorHeight((state) => state.height)
+  const [isResizing, setIsResizing] = useState(false)
+  const handleResizeDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const panel = panelRef.current
+    if (e.button !== 0 || !panel) return
+    e.preventDefault()
+    const rect = panel.getBoundingClientRect()
+    const header = panel.querySelector<HTMLElement>('[data-panel-header]')?.offsetHeight ?? 0
+    // The column's bottom in the right stack, else the viewer's.
+    const floor =
+      panel.closest('[data-right-stack]')?.getBoundingClientRect().bottom ??
+      getDragBounds(panel).bottom - DRAG_MARGIN
+    const startY = e.clientY
+    const handle = e.currentTarget
+    handle.setPointerCapture(e.pointerId)
+    setIsResizing(true)
+    const onMove = (move: PointerEvent) => {
+      const next = clamp(rect.height + move.clientY - startY, header + MIN_BODY_HEIGHT, floor - rect.top)
+      useInspectorHeight.getState().setHeight(next)
+    }
+    const onUp = () => {
+      handle.removeEventListener('pointermove', onMove)
+      handle.removeEventListener('pointerup', onUp)
+      handle.removeEventListener('pointercancel', onUp)
+      setIsResizing(false)
+    }
+    handle.addEventListener('pointermove', onMove)
+    handle.addEventListener('pointerup', onUp)
+    handle.addEventListener('pointercancel', onUp)
   }, [])
-
-  const handleHeaderPointerUp = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      const drag = dragRef.current
-      if (!drag) return
-      dragRef.current = null
-      setIsDragging(false)
-      e.currentTarget.releasePointerCapture(e.pointerId)
-      // A press that never turned into a drag is a click → same mode toggle
-      // as the chevron.
-      if (!drag.moved) handleCardToggle()
-    },
-    [handleCardToggle],
-  )
 
   // Expanding can grow the panel past an edge if it was dragged there while
   // collapsed — nudge it back inside the viewer bounds.
@@ -278,7 +223,7 @@ export function PanelWrapper({
           : inStack
             ? // In the shared right column: it grows down and scrolls on itself,
               // leaving the shortcuts card below it its room (`right-stack.tsx`).
-              'pointer-events-auto flex max-h-full min-h-0 flex-[0_1_auto] flex-col overflow-hidden rounded-xl border border-border/50 bg-sidebar/95 shadow-2xl backdrop-blur-xl dark:text-foreground'
+              'pointer-events-auto relative flex max-h-full min-h-0 flex-[0_1_auto] flex-col overflow-hidden rounded-xl border border-border/50 bg-sidebar/95 shadow-2xl backdrop-blur-xl dark:text-foreground'
           // Cap height at `100dvh - 154px` so a tall panel's bottom edge
           // aligns flush with the top of the floating bottom action bar.
           // Combined with `top-20` (80px), the panel's bottom sits at
@@ -296,7 +241,8 @@ export function PanelWrapper({
           ? undefined
           : {
               width,
-              transform: offset ? `translate(${offset.x}px, ${offset.y}px)` : undefined,
+              height: !collapsed && height ? height : undefined,
+              transform: shown ? `translate(${shown.x}px, ${shown.y}px)` : undefined,
             }
       }
     >
@@ -311,8 +257,6 @@ export function PanelWrapper({
           )}
           data-panel-header
           onPointerDown={handleHeaderPointerDown}
-          onPointerMove={handleHeaderPointerMove}
-          onPointerUp={handleHeaderPointerUp}
         >
           <div className={cn('flex min-w-0 items-center gap-2', titleContent && 'flex-1 pr-2')}>
             {onBack && (
@@ -429,7 +373,11 @@ export function PanelWrapper({
           controls (`children`). A stale extension id falls back to regular
           via `resolveActiveExtension`. */}
       {!(collapsed && !isMobile) && (
-        <div className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto" data-panel-scroll>
+        <ScrollArea
+          className="flex-1"
+          contentClassName="flex flex-col"
+          viewportProps={{ 'data-panel-scroll': true }}
+        >
           {!isMobile && selectedId && activeExtension ? (
             <InspectorExtensionSection
               extension={activeExtension}
@@ -460,11 +408,29 @@ export function PanelWrapper({
                 ))}
             </>
           )}
-        </div>
+        </ScrollArea>
       )}
 
       {resolvedFooter && !(collapsed && !isMobile) && (
         <div className="shrink-0 border-border/50 border-t p-3">{resolvedFooter}</div>
+      )}
+
+      {/* Resize handle, as the sidebar's but along the bottom; double-click fits the content again. */}
+      {!isMobile && !collapsed && (
+        <div
+          aria-label="Resize panel"
+          className="group absolute inset-x-0 bottom-0 z-10 flex h-3 cursor-row-resize touch-none items-center justify-center"
+          onDoubleClick={() => useInspectorHeight.getState().setHeight(null)}
+          onPointerDown={handleResizeDown}
+          role="separator"
+        >
+          <div
+            className={cn(
+              'h-1 w-8 rounded-full bg-neutral-500 transition-opacity',
+              isResizing ? 'opacity-100' : 'opacity-60 group-hover:opacity-100',
+            )}
+          />
+        </div>
       )}
     </div>
   )
