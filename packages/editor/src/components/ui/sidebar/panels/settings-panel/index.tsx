@@ -67,12 +67,12 @@ import { cn } from './../../../../../lib/utils'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import useEditor, { selectDefaultBuildingAndLevel } from './../../../../../store/use-editor'
 import useFloorplanMode from './../../../../../store/use-floorplan-mode'
-import useHudPreferences from './../../../../../store/use-hud-preferences'
 import { type SendToAppStep, useSendToApp } from './../../../../../store/use-send-to-app'
 import { AudioSettingsDialog } from './audio-settings-dialog'
 import { KeyboardShortcutsDialog } from './keyboard-shortcuts-dialog'
 import { LoadBuildDialog, type PendingImport } from './load-build-dialog'
 import { PrintExportButton } from './print-export-button'
+import { useShortcutHintsSetting } from './shortcut-hints-setting'
 
 type SceneNode = Record<string, unknown> & {
   id?: unknown
@@ -446,10 +446,10 @@ export function SettingsPanel({
   const resetSelection = useViewer((state) => state.resetSelection)
   const modelExport = useEditor((state) => state.modelExport)
   const shadows = useViewer((state) => state.shadows)
-  const showHints = useHudPreferences((state) => state.showHints)
   const setPhase = useEditor((state) => state.setPhase)
   const floorplanMode = useFloorplanMode((state) => state.mode)
   const registryVersion = useRegistryVersion()
+  const shortcutHints = useShortcutHintsSetting()
   const visibleOnlySwitchId = useId()
   const includeNodeTypeIdPrefix = useId()
   const includePresentationIdPrefix = useId()
@@ -869,12 +869,6 @@ export function SettingsPanel({
             label="Shadows"
             onCheckedChange={(checked) => useViewer.getState().setShadows(checked)}
           />
-          <SettingsSwitchRow
-            checked={showHints}
-            description="The panel listing the keys for the tool in hand."
-            label="Show shortcut hints"
-            onCheckedChange={(checked) => useHudPreferences.getState().setShowHints(checked)}
-          />
         </SettingsSection>
 
         <SettingsSection description="Download the scene or hand it to another app." title="Export">
@@ -1172,6 +1166,11 @@ export function SettingsPanel({
             <AudioSettingsDialog />
             <KeyboardShortcutsDialog />
           </div>
+          <SettingsSwitchRow
+            {...shortcutHints}
+            description="The panel listing the keys for the tool in hand."
+            label="Show shortcut hints"
+          />
         </SettingsSection>
 
         <SettingsSection
