@@ -26,3 +26,8 @@ test('a vertical wall continuation works the same, crossing the corner z line', 
   const snap = snapWallEndpointToExtension([3.95, 0], [3.95, 0], [1, 0], [east])
   expect(snap?.point).toEqual([4, 0])
 })
+
+test('a curved wall offers no continuation', () => {
+  const arc = { id: 'wall_arc', start: [2, 0], end: [6, 0], curveOffset: 1 } as never
+  expect(snapWallEndpointToExtension([0, 0.05], [0, 0.05], [0, 3], [arc])).toBeNull()
+})

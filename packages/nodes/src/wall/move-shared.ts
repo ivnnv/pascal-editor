@@ -2,6 +2,7 @@ import {
   type AlignmentGuide,
   type AnyNodeId,
   getMaterialPresetByRef,
+  isCurvedWall,
   parseMaterialRef,
   resolveMaterial,
   type SceneMaterialId,
@@ -76,7 +77,7 @@ export function snapWallEndpointToExtension(
   rawPoint: WallPlanPoint,
   placedPoint: WallPlanPoint,
   origin: WallPlanPoint,
-  walls: readonly Pick<WallNode, 'id' | 'start' | 'end'>[],
+  walls: readonly Pick<WallNode, 'id' | 'start' | 'end' | 'curveOffset'>[],
 ): WallExtensionSnap | null {
   let best: {
     wall: Pick<WallNode, 'id' | 'start' | 'end'>
@@ -86,6 +87,8 @@ export function snapWallEndpointToExtension(
   } | null = null
   let bestDistance = WALL_MOVE_ALIGN_TOLERANCE
   for (const wall of walls) {
+    // A curved wall does not continue along its chord.
+    if (isCurvedWall(wall)) continue
     const dx = wall.end[0] - wall.start[0]
     const dz = wall.end[1] - wall.start[1]
     const length = Math.hypot(dx, dz)

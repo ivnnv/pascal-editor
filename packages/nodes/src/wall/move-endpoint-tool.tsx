@@ -456,7 +456,8 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       if (getActiveSnappingMode() !== 'off' && !snapResult.snap) {
         alignedPoint = snapWallEndpointToOrigin(planPoint, alignedPoint, movingOriginalPoint)
       }
-      // Or onto another wall's continuation, shown as a guide.
+      // Or onto another wall's continuation. Its guide is in plan coordinates,
+      // so only the floor plan draws it.
       if (!snapResult.snap && isMagneticSnapActive()) {
         const ignored = altPressedRef.current ? [nodeId] : [nodeId, ...movingLinkedWallIds]
         const extension = snapWallEndpointToExtension(
@@ -465,10 +466,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
           movingOriginalPoint,
           levelWalls.filter((wall) => !ignored.includes(wall.id)),
         )
-        if (extension) {
-          alignedPoint = extension.point
-          useAlignmentGuides.getState().set([extension.guide])
-        }
+        if (extension) alignedPoint = extension.point
       }
 
       if (
