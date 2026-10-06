@@ -42,7 +42,7 @@ import { Html } from '@react-three/drei'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
-import { snapWallEndpointToOrigin } from './move-shared'
+import { snapWallEndpointToExtension, snapWallEndpointToOrigin } from './move-shared'
 
 /**
  * Wall endpoint move tool (kind-owned).
@@ -455,6 +455,20 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       // unless it is joining another wall.
       if (getActiveSnappingMode() !== 'off' && !snapResult.snap) {
         alignedPoint = snapWallEndpointToOrigin(planPoint, alignedPoint, movingOriginalPoint)
+      }
+      // Or onto another wall's continuation, shown as a guide.
+      if (!snapResult.snap && isMagneticSnapActive()) {
+        const ignored = altPressedRef.current ? [nodeId] : [nodeId, ...movingLinkedWallIds]
+        const extension = snapWallEndpointToExtension(
+          planPoint,
+          alignedPoint,
+          movingOriginalPoint,
+          levelWalls.filter((wall) => !ignored.includes(wall.id)),
+        )
+        if (extension) {
+          alignedPoint = extension.point
+          useAlignmentGuides.getState().set([extension.guide])
+        }
       }
 
       if (

@@ -1,4 +1,5 @@
 import {
+  type AlignmentGuide,
   type AnyNodeId,
   getMaterialPresetByRef,
   parseMaterialRef,
@@ -60,6 +61,76 @@ export function snapWallEndpointToOrigin(
   if (nearX) return [origin[0], snappedPoint[1]]
   if (nearZ) return [snappedPoint[0], origin[1]]
   return snappedPoint
+}
+
+/** A dragged corner pulled onto the line that continues another wall past its end. */
+export type WallExtensionSnap = { point: WallPlanPoint; guide: AlignmentGuide }
+
+/**
+ * Pulls a dragged corner onto the nearest wall's continuation (its line past
+ * either end) when the raw cursor is within the align tolerance of it. A
+ * corner held on its starting x / z line lands where that line crosses the
+ * continuation, which is what makes a clean T.
+ */
+export function snapWallEndpointToExtension(
+  rawPoint: WallPlanPoint,
+  placedPoint: WallPlanPoint,
+  origin: WallPlanPoint,
+  walls: readonly Pick<WallNode, 'id' | 'start' | 'end'>[],
+): WallExtensionSnap | null {
+  let best: {
+    wall: Pick<WallNode, 'id' | 'start' | 'end'>
+    ux: number
+    uz: number
+    past: 'start' | 'end'
+  } | null = null
+  let bestDistance = WALL_MOVE_ALIGN_TOLERANCE
+  for (const wall of walls) {
+    const dx = wall.end[0] - wall.start[0]
+    const dz = wall.end[1] - wall.start[1]
+    const length = Math.hypot(dx, dz)
+    if (length < POINT_EPSILON) continue
+    const ux = dx / length
+    const uz = dz / length
+    const rx = rawPoint[0] - wall.start[0]
+    const rz = rawPoint[1] - wall.start[1]
+    const along = rx * ux + rz * uz
+    // On the wall's own body the wall snap already holds it.
+    if (along >= 0 && along <= length) continue
+    const distance = Math.abs(rx * uz - rz * ux)
+    if (distance > bestDistance) continue
+    bestDistance = distance
+    best = { wall, ux, uz, past: along < 0 ? 'start' : 'end' }
+  }
+  if (!best) return null
+  const { wall, ux, uz, past } = best
+  const keepsX = placedPoint[0] === origin[0] && Math.abs(ux) > 1e-6
+  const keepsZ = placedPoint[1] === origin[1] && Math.abs(uz) > 1e-6
+  const along = keepsX
+    ? (origin[0] - wall.start[0]) / ux
+    : keepsZ
+      ? (origin[1] - wall.start[1]) / uz
+      : (placedPoint[0] - wall.start[0]) * ux + (placedPoint[1] - wall.start[1]) * uz
+  const point: WallPlanPoint = [wall.start[0] + ux * along, wall.start[1] + uz * along]
+  // A crossing far from the cursor is not what the user is reaching for.
+  if (Math.hypot(point[0] - rawPoint[0], point[1] - rawPoint[1]) > 3 * WALL_MOVE_ALIGN_TOLERANCE) {
+    return null
+  }
+  const from = past === 'start' ? wall.start : wall.end
+  return {
+    point,
+    guide: {
+      axis: Math.abs(ux) >= Math.abs(uz) ? 'z' : 'x',
+      coord: Math.abs(ux) >= Math.abs(uz) ? point[1] : point[0],
+      from: { x: from[0], z: from[1] },
+      to: { x: point[0], z: point[1] },
+      anchor: { x: from[0], z: from[1] },
+      movingAnchorKind: 'corner',
+      candidateAnchorKind: 'corner',
+      candidateNodeId: wall.id,
+      distance: 0,
+    },
+  }
 }
 
 /**
