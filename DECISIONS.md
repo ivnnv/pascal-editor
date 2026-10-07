@@ -41,7 +41,7 @@ Each entry: decision · why · enforced by · revisit when. Detail and examples 
 
 **E-003 Old scenes always load.** A schema change ships its load/migration path in the same PR; a floor-plate migration keeps visible area within 1 %. · Why: scenes are user data, some years old. · Enforced: `core/src/utils/*corpus*.test.ts`, `frozen-floor-gate.test.ts`. · Revisit: never.
 
-**E-004 Snapping is a visible per-context mode.** The mode is changed from its chip (or the snapping pill when the hints panel is hidden), never by a key tap; holding Shift turns snapping off while held, and the chip says so; Alt *hold* forces the raw cursor past snapping and collisions. Never read `event.shiftKey` for snapping (the held state lives in `useSnappingHold`); grid steps are gated on `isGridSnapActive()`; snappable kinds declare `snapProfile`. · Why: a Shift tap, also used to add to a selection, changed the mode unnoticed; the mode is always shown, so a held key is discoverable. · Enforced: `review-architecture` §F. · See `wiki/architecture/tools.md`, `interaction-scope.md`.
+**E-004 Snapping is a visible per-context mode.** Shift *tap* cycles the mode; Alt *hold* forces the raw cursor past snapping and collisions. No held-Shift bypass; never read `event.shiftKey` for snapping; grid steps are gated on `isGridSnapActive()`; snappable kinds declare `snapProfile`. · Why: hidden held keys are undiscoverable and un-portable to 2D. · Enforced: `review-architecture` §F. · See `wiki/architecture/tools.md`, `interaction-scope.md`.
 
 **E-005 Interaction state has one owner.** "What the user is doing" lives in `useInteractionScope` (`begin / update / end / endIf`), not in new `useEditor` booleans. · Enforced: `review-architecture` §F.
 
@@ -65,6 +65,8 @@ Each entry: decision · why · enforced by · revisit when. Detail and examples 
 
 **E-015 Public-repo hygiene (2026-10-01).** This repo is open source: no private plan paths in docs or skills (cite a wiki page or a decision ID), maintainer skills carry `metadata.internal: true`, product skills under `skills/` are the only discoverable ones. · Enforced: `scripts/validate-skills.ts` + policy tests.
 
+**E-016 Shift holds snapping off (2026-10-07).** The snapping mode changes from its chip (or the snapping pill shown while the hints panel is closed or folded), never from a key tap. Holding Shift turns snapping off while held, and the chip says so; the held state lives in `useSnappingHold`, never in `event.shiftKey`. Alt keeps E-004's raw-cursor meaning. · Why: a Shift tap, also used to add to a selection, changed the mode unnoticed; with the mode always shown, a held key is discoverable. · Supersedes E-004's Shift-tap cycle and its no-held-Shift rule.
+
 ## Testing
 
 **T-001 (2026-10-01, owner).** A test protects an observable result, a persisted or wire contract, or an explicit architecture/performance invariant — and tolerates an equivalent implementation. Therefore: test through package exports; no source-grep, prose-pinning or import-spelling tests (use Biome rules); no cross-package `src/` imports in tests; no `mock.module` that forces sibling files to re-spawn `bun test`; no real sleeps (inject a clock); no tests named after review rounds or bots; refactor scaffolding (parity tables, "matches main" goldens, frozen copies of old code) is deleted in the PR that lands the refactor; performance claims live in `__bench__` / bench lanes, not unit gates; a bug fix is one repro in the feature's existing file, not a new `*-audit*` file; a test that needs an opt-in flag must have a lane that sets it, or go. "Internal" is not the deletion criterion: core's import boundary, the writers allowlist and the migration thresholds pin internals with external consequences and stay. · Why: 231k test lines (82k of them fixtures) had become the main cost of every change for people and agents alike. · Enforced: review; Biome rules as they land.
@@ -78,4 +80,5 @@ Each entry: decision · why · enforced by · revisit when. Detail and examples 
 
 ## Superseded
 
+- E-004's "Shift *tap* cycles the mode; no held-Shift bypass" → replaced by E-016 on 2026-10-07.
 - "No massive rewrites unless warranted" (AGENTS.md, 2026-05) → replaced by the first working agreement on 2026-10-01: the codebase can be in a wrong shape and the rule was keeping it there.
