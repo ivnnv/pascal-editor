@@ -14,6 +14,7 @@ import {
   getWallLocalFaceZ,
   getWallMidpointHandlePoint,
   getWallPlanFootprint,
+  getWallPlanOutline,
   getWallThickness,
   isCurvedWall,
   type WallLayerMiterData,
@@ -59,6 +60,19 @@ function floorplanWallThickness(wall: WallNode): number {
     baseThickness + FLOORPLAN_MAX_EXTRA_THICKNESS,
     Math.max(baseThickness, scaledThickness, FLOORPLAN_MIN_VISIBLE_WALL_THICKNESS),
   )
+}
+
+/** Footprints of the walls sharing an end with `wall`, to find its exposed edges. */
+function joinedFootprints(wall: WallNode, walls: readonly WallNode[], miters: WallMiterData) {
+  const touches = (other: WallNode) =>
+    [other.start, other.end].some((point) =>
+      [wall.start, wall.end].some(
+        (end) => Math.abs(point[0] - end[0]) < 1e-6 && Math.abs(point[1] - end[1]) < 1e-6,
+      ),
+    )
+  return walls
+    .filter((other) => other.id !== wall.id && touches(other))
+    .map((other) => getWallPlanFootprint(other, miters))
 }
 
 function exaggerateWallThickness(wall: WallNode): WallNode {
@@ -345,14 +359,22 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
   const fill =
     node.wallType === 'curtain' ? 'transparent' : showSelectedChrome ? '#ffffff' : '#374151'
 
+  // Unselected, a straight wall strokes only its faces and free ends, so the
+  // mitre between joined walls does not show as a seam.
+  const outline =
+    showSelectedChrome || node.wallType === 'curtain'
+      ? null
+      : getWallPlanOutline(self, miters, joinedFootprints(self, getPurposeWalls(), miters))
   const children: FloorplanGeometry[] = [
     {
       kind: 'polygon',
       points,
       fill,
-      stroke,
+      stroke: outline ? 'none' : stroke,
       strokeWidth: showSelectedChrome ? FLOORPLAN_SELECTED_WALL_STROKE_WIDTH : 0.02,
-      opacity: 0.92,
+      // A mitred corner's sharp vertex would spike the stroke past the wall.
+      strokeLinejoin: 'round',
+      opacity: outline ? 1 : 0.92,
       metadata: floorplanGeometryMetadata({ annotationObstacle: 'outline' }),
       // Once the wall is selected, the body keeps catching the pointer
       // so the cursor stays neutral (no drag/pointer affordance from
@@ -362,6 +384,19 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       cursor: isSelected ? 'default' : undefined,
     },
   ]
+
+  if (outline && outline.length > 0) {
+    children.push({
+      kind: 'path',
+      d: outline.map(([from, to]) => `M${from!.x} ${from!.y}L${to!.x} ${to!.y}`).join(''),
+      fill: 'none',
+      stroke,
+      strokeWidth: 0.02,
+      // Square ends close the outer corner where two walls' faces meet.
+      strokeLinecap: 'square',
+      pointerEvents: 'none',
+    })
+  }
 
   if (node.wallType === 'curtain') {
     children.push(
