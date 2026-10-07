@@ -62,6 +62,19 @@ function floorplanWallThickness(wall: WallNode): number {
   )
 }
 
+/** Footprints of the walls sharing an end with `wall`, to find its exposed edges. */
+function joinedFootprints(wall: WallNode, walls: readonly WallNode[], miters: WallMiterData) {
+  const touches = (other: WallNode) =>
+    [other.start, other.end].some((point) =>
+      [wall.start, wall.end].some(
+        (end) => Math.abs(point[0] - end[0]) < 1e-6 && Math.abs(point[1] - end[1]) < 1e-6,
+      ),
+    )
+  return walls
+    .filter((other) => other.id !== wall.id && touches(other))
+    .map((other) => getWallPlanFootprint(other, miters))
+}
+
 function exaggerateWallThickness(wall: WallNode): WallNode {
   return { ...wall, thickness: floorplanWallThickness(wall) }
 }
@@ -349,7 +362,9 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
   // Unselected, a straight wall strokes only its faces and free ends, so the
   // mitre between joined walls does not show as a seam.
   const outline =
-    showSelectedChrome || node.wallType === 'curtain' ? null : getWallPlanOutline(self, miters)
+    showSelectedChrome || node.wallType === 'curtain'
+      ? null
+      : getWallPlanOutline(self, miters, joinedFootprints(self, getPurposeWalls(), miters))
   const children: FloorplanGeometry[] = [
     {
       kind: 'polygon',
