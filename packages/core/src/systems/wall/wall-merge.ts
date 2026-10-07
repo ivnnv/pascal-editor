@@ -480,7 +480,11 @@ export function planWallMerge(
       if (node.id !== merged.id && node.id !== next.id)
         tees.push({ id: node.id as AnyNodeId, joint })
     }
-    if (!areWallsCollinearAcrossPoint(merged, next, joint, MERGE_STRAIGHT_TOLERANCE))
+    // The bend is judged between the two original walls at this joint, not
+    // against the run straightened so far.
+    const neighbour =
+      walls.find((wall) => wall !== next && getWallEndpointAtPoint(wall, joint) !== null) ?? merged
+    if (!areWallsCollinearAcrossPoint(neighbour, next, joint, MERGE_STRAIGHT_TOLERANCE))
       throw Error('Merge walls that continue in a straight line.')
     const mismatch = wallStyleMismatch(merged, next, {
       sides: false,
@@ -535,6 +539,16 @@ export function planWallMerge(
     virtual[merged.id] = merged
     notes.push(`Keeps the ${Math.round(thickness * 1000) / 10} cm thickness of the longest wall.`)
   }
+  // A wall already ending on the side of a selected wall follows it onto the
+  // straightened line too.
+  for (const node of Object.values(nodes)) {
+    if (node?.type !== 'wall' || (node.parentId ?? null) !== levelId) continue
+    if (walls.some((wall) => wall.id === node.id) || tees.some((tee) => tee.id === node.id))
+      continue
+    for (const end of [node.start, node.end] as [number, number][]) {
+      if (walls.some((wall) => liesOnWallSide(end, wall))) tees.push({ id: node.id, joint: end })
+    }
+  }
   // A wall that met a joint now ends on the merged wall's side, on its line.
   for (const { id, joint } of tees) {
     const tee = virtual[id]
@@ -555,6 +569,18 @@ export function planWallMerge(
     wallId: merged.id,
     notes,
   }
+}
+
+/** Whether `point` touches `wall`'s side, strictly between its ends. */
+function liesOnWallSide(point: [number, number], wall: WallNode): boolean {
+  const dx = wall.end[0] - wall.start[0]
+  const dz = wall.end[1] - wall.start[1]
+  const lengthSq = dx * dx + dz * dz
+  if (lengthSq < 1e-12) return false
+  const t = ((point[0] - wall.start[0]) * dx + (point[1] - wall.start[1]) * dz) / lengthSq
+  if (t <= 1e-6 || t >= 1 - 1e-6) return false
+  const offset = Math.abs((point[0] - wall.start[0]) * dz - (point[1] - wall.start[1]) * dx)
+  return offset / Math.sqrt(lengthSq) <= (wall.thickness ?? 0.2) / 2 + 1e-3
 }
 
 function projectOntoSegment(
