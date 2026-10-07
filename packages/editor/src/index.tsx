@@ -782,9 +782,12 @@ export {
   cycleSnappingModeIn,
   getSnappingModeLabel,
   resolveSnapFlags,
+  SMART_ANGLE_TOLERANCE,
+  SMART_SNAP_TOLERANCE,
   type SnapContext,
   type SnapFlags,
   type SnappingMode,
+  softSnapScalar,
 } from './lib/snapping-mode'
 export { getSpatialPointerId, spatialPointerInput } from './lib/spatial-pointer-input'
 export { duplicateStairSubtree } from './lib/stair-duplication'
