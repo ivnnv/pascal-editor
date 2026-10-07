@@ -102,7 +102,7 @@ function collectQuickActionNodes(
 // clearance it keeps over a corner handle, in px.
 const MENU_HALF_WIDTH_PX = 110
 const MENU_GAP_PX = 32
-const CORNER_CLEARANCE_PX = 14
+const CORNER_CLEARANCE_PX = 30
 
 /**
  * Floating Move / Duplicate / Delete buttons that appear above the
