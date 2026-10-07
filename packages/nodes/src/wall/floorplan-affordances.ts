@@ -302,6 +302,7 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           getActiveSnappingMode() === 'off' || snapResult.snap
             ? aligned
             : snapWallEndpointToOrigin(planPoint as WallPlanPoint, aligned, movingOriginal)
+        let onExtension = false
         // Or onto another wall's continuation, shown as a guide.
         if (!snapResult.snap && isMagneticSnapActive()) {
           const extension = snapWallEndpointToExtension(
@@ -312,6 +313,7 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           )
           if (extension) {
             placed = extension.point
+            onExtension = true
             useAlignmentGuides.getState().set([extension.guide])
           }
         }
@@ -325,7 +327,8 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           pointsEqual(w.start, movingOriginal) ? w.end : w.start
         // Back where it started stays put, so a drag there and back changes nothing.
         const atOrigin = placed[0] === movingOriginal[0] && placed[1] === movingOriginal[1]
-        if (getActiveSnappingMode() !== 'off' && !snapResult.snap && !atOrigin) {
+        // A corner on another wall's continuation keeps that line.
+        if (getActiveSnappingMode() !== 'off' && !snapResult.snap && !atOrigin && !onExtension) {
           // The nearest step across the moving walls, not the first one listed.
           let best: { point: WallPlanPoint; diff: number } | null = null
           for (const wall of movingWalls) {

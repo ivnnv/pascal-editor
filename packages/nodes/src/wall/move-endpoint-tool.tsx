@@ -457,6 +457,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       if (getActiveSnappingMode() !== 'off' && !snapResult.snap) {
         alignedPoint = snapWallEndpointToOrigin(planPoint, alignedPoint, movingOriginalPoint)
       }
+      let onExtension = false
       // Or onto another wall's continuation. Its guide is in plan coordinates,
       // so only the floor plan draws it.
       if (!snapResult.snap && isMagneticSnapActive()) {
@@ -467,7 +468,10 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
           movingOriginalPoint,
           levelWalls.filter((wall) => !ignored.includes(wall.id)),
         )
-        if (extension) alignedPoint = extension.point
+        if (extension) {
+          alignedPoint = extension.point
+          onExtension = true
+        }
       }
       // The corner squares against the walls that move with it, as in the plan.
       const atOrigin =
@@ -476,7 +480,9 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         getActiveSnappingMode() !== 'off' &&
         !snapResult.snap &&
         !altPressedRef.current &&
-        !atOrigin
+        !atOrigin &&
+        // A corner on another wall's continuation keeps that line.
+        !onExtension
       ) {
         let best: { point: WallPlanPoint; diff: number } | null = null
         for (const wall of linkedOriginalsRef.current) {
