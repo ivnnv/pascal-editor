@@ -53,11 +53,17 @@ function getWallFreeEndpoint(wall: Pick<WallNode, 'start' | 'end'>, sharedPoint:
 export function wallStyleMismatch(
   a: WallNode,
   b: WallNode,
-  options: { sides: boolean; heightOf?: (wall: WallNode) => number },
+  options: {
+    sides: boolean
+    heightOf?: (wall: WallNode) => number
+    // An explicit merge settles thickness itself (the longer wall's wins).
+    thickness?: boolean
+  },
 ): string | null {
   if ((a.parentId ?? null) !== (b.parentId ?? null)) return 'floor'
   if (Math.abs((a.curveOffset ?? 0) - (b.curveOffset ?? 0)) > 1e-6) return 'curve'
-  if (Math.abs((a.thickness ?? 0.2) - (b.thickness ?? 0.2)) > 1e-6) return 'thickness'
+  if (options.thickness !== false && Math.abs((a.thickness ?? 0.2) - (b.thickness ?? 0.2)) > 1e-6)
+    return 'thickness'
   const opposite =
     (a.end[0] - a.start[0]) * (b.end[0] - b.start[0]) +
       (a.end[1] - a.start[1]) * (b.end[1] - b.start[1]) <
@@ -281,6 +287,8 @@ export function areWallsCollinearAcrossPoint(
   a: WallNode,
   b: WallNode,
   sharedPoint: [number, number],
+  // Sine of the largest bend still read as straight.
+  tolerance = 1e-4,
 ) {
   const freeA = getWallFreeEndpoint(a, sharedPoint)
   const freeB = getWallFreeEndpoint(b, sharedPoint)
@@ -295,7 +303,7 @@ export function areWallsCollinearAcrossPoint(
 
   const cross = (ax * bz - az * bx) / (lenA * lenB)
   const dot = (ax * bx + az * bz) / (lenA * lenB)
-  return Math.abs(cross) <= 1e-4 && dot < -0.999
+  return Math.abs(cross) <= tolerance && dot < -0.999 + tolerance
 }
 
 export function resolveMergedWallEndpoints(
@@ -411,18 +419,22 @@ export function buildMergedWallAttachmentUpdates(
   return updates
 }
 
+// The largest bend (sine of 1°) an explicit merge still straightens out.
+const MERGE_STRAIGHT_TOLERANCE = Math.sin(Math.PI / 180)
+
 /**
- * Merges a straight run of adjoining walls into one — the inverse of a split.
- * Every joint must hold exactly these walls (a T or a cross stays split), and
- * neighbours must continue in line and look alike (`wallStyleMismatch`: same
- * thickness, visible height and finish). The wall with the most attachments
- * keeps its id and height mode; openings and wall items keep their world
- * position on it.
+ * Merges a run of adjoining walls into one — the inverse of a split. Walls
+ * bent by up to 1° at a joint are straightened between the run's outer ends,
+ * and a wall meeting a joint (a T) stays joined to the merged wall's side.
+ * Neighbours must look alike (`wallStyleMismatch`: visible height and
+ * finish); when their thickness differs, the longer wall's is kept and a note
+ * says so. The wall with the most attachments keeps its id and height mode;
+ * openings and wall items keep their world position on it.
  */
 export function planWallMerge(
   nodes: Record<AnyNodeId, AnyNode>,
   wallIds: readonly AnyNodeId[],
-): { changes: WallTopologyChanges; wallId: WallNode['id'] } {
+): { changes: WallTopologyChanges; wallId: WallNode['id']; notes: string[] } {
   const walls = [...new Set(wallIds)]
     .map((id) => nodes[id])
     .filter((node): node is WallNode => node?.type === 'wall')
@@ -440,6 +452,10 @@ export function planWallMerge(
   )
   let merged = primary!
   let remaining = rest
+  // Walls meeting a joint from the side, and where they met it.
+  const tees: { id: AnyNodeId; joint: [number, number] }[] = []
+  const longest = [...walls].sort((a, b) => wallLength(b) - wallLength(a))[0]!
+  const thicknesses = new Set(walls.map((wall) => wall.thickness ?? 0.2))
   while (remaining.length > 0) {
     let next: WallNode | undefined
     let joint: [number, number] | undefined
@@ -457,12 +473,22 @@ export function planWallMerge(
         (node.parentId ?? null) === levelId &&
         getWallEndpointAtPoint(node, joint) !== null,
     )
-    if (atJoint.length !== 2)
-      throw Error('Another wall meets this joint, so merging would disconnect it.')
-    if (!areWallsCollinearAcrossPoint(merged, next, joint))
+    // A third selected wall at this joint would branch the run.
+    if (remaining.some((wall) => wall !== next && getWallEndpointAtPoint(wall, joint) !== null))
+      throw Error('Merge walls that form one straight run.')
+    for (const node of atJoint) {
+      if (node.id !== merged.id && node.id !== next.id)
+        tees.push({ id: node.id as AnyNodeId, joint })
+    }
+    // The bend is judged between the two original walls at this joint, not
+    // against the run straightened so far.
+    const neighbour =
+      walls.find((wall) => wall !== next && getWallEndpointAtPoint(wall, joint) !== null) ?? merged
+    if (!areWallsCollinearAcrossPoint(neighbour, next, joint, MERGE_STRAIGHT_TOLERANCE))
       throw Error('Merge walls that continue in a straight line.')
     const mismatch = wallStyleMismatch(merged, next, {
       sides: false,
+      thickness: false,
       heightOf: (wall) => getWallEffectiveHeightForNodes(wall, virtual),
     })
     if (mismatch) throw Error(`These walls have a different ${mismatch}.`)
@@ -506,6 +532,32 @@ export function planWallMerge(
     remaining = remaining.filter((wall) => wall !== next)
   }
 
+  const notes: string[] = []
+  if (thicknesses.size > 1) {
+    const thickness = longest.thickness ?? 0.2
+    merged = { ...merged, thickness } as WallNode
+    virtual[merged.id] = merged
+    notes.push(`Keeps the ${Math.round(thickness * 1000) / 10} cm thickness of the longest wall.`)
+  }
+  // A wall already ending on the side of a selected wall follows it onto the
+  // straightened line too.
+  for (const node of Object.values(nodes)) {
+    if (node?.type !== 'wall' || (node.parentId ?? null) !== levelId) continue
+    if (walls.some((wall) => wall.id === node.id) || tees.some((tee) => tee.id === node.id))
+      continue
+    for (const end of [node.start, node.end] as [number, number][]) {
+      if (walls.some((wall) => liesOnWallSide(end, wall))) tees.push({ id: node.id, joint: end })
+    }
+  }
+  // A wall that met a joint now ends on the merged wall's side, on its line.
+  for (const { id, joint } of tees) {
+    const tee = virtual[id]
+    if (tee?.type !== 'wall') continue
+    const onLine = projectOntoSegment(joint, merged.start, merged.end)
+    const end = getWallEndpointAtPoint(tee, joint)
+    if (end && !pointsEqual(onLine, joint, 1e-9)) virtual[id] = { ...tee, [end]: onLine } as AnyNode
+  }
+
   return {
     changes: {
       create: [],
@@ -515,5 +567,34 @@ export function planWallMerge(
       delete: walls.filter((wall) => !virtual[wall.id]).map((wall) => wall.id),
     },
     wallId: merged.id,
+    notes,
   }
+}
+
+/** Whether `point` touches `wall`'s side, strictly between its ends. */
+function liesOnWallSide(point: [number, number], wall: WallNode): boolean {
+  const dx = wall.end[0] - wall.start[0]
+  const dz = wall.end[1] - wall.start[1]
+  const lengthSq = dx * dx + dz * dz
+  if (lengthSq < 1e-12) return false
+  const t = ((point[0] - wall.start[0]) * dx + (point[1] - wall.start[1]) * dz) / lengthSq
+  if (t <= 1e-6 || t >= 1 - 1e-6) return false
+  const offset = Math.abs((point[0] - wall.start[0]) * dz - (point[1] - wall.start[1]) * dx)
+  return offset / Math.sqrt(lengthSq) <= (wall.thickness ?? 0.2) / 2 + 1e-3
+}
+
+function projectOntoSegment(
+  point: [number, number],
+  start: [number, number],
+  end: [number, number],
+): [number, number] {
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  const lengthSq = dx * dx + dz * dz
+  if (lengthSq < 1e-12) return point
+  const t = Math.max(
+    0,
+    Math.min(1, ((point[0] - start[0]) * dx + (point[1] - start[1]) * dz) / lengthSq),
+  )
+  return [start[0] + dx * t, start[1] + dz * t]
 }

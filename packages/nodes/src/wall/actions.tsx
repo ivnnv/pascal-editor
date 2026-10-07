@@ -7,15 +7,13 @@ import {
 } from '@pascal-app/core'
 import {
   captureElementActionOrigin,
+  cn,
   completeElementAction,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
   triggerSFX,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { FoldHorizontal, Scissors } from 'lucide-react'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { openWallSplit } from './split-session'
 
 const BUTTON =
@@ -55,54 +53,70 @@ function SplitWallAction() {
   )
 }
 
-/** Joins selected walls that continue each other into one — the inverse of Split. */
+/**
+ * Joins selected walls that continue each other into one — the inverse of
+ * Split. When it cannot, a click says why right in the menu; when it has to
+ * settle something (a thickness), the first click says what, the second merges.
+ */
 function MergeWallsAction() {
   const selected = useViewer((s) => s.selection.selectedIds) as AnyNodeId[]
   const nodes = useScene((s) => s.nodes)
   const readOnly = useScene((s) => s.readOnly)
-  // null: not a wall selection (render nothing); otherwise why it can't merge, or null.
+  const [message, setMessage] = useState<string | null>(null)
+  // null: not a wall selection (render nothing).
   const merge = useMemo(() => {
     if (selected.length < 2 || selected.some((id) => nodes[id]?.type !== 'wall')) return null
     try {
-      planWallMerge(nodes, selected)
-      return { reason: null }
+      return { reason: null, notes: planWallMerge(nodes, selected).notes }
     } catch (error) {
-      return { reason: error instanceof Error ? error.message : 'These walls cannot be merged.' }
+      const reason = error instanceof Error ? error.message : 'These walls cannot be merged.'
+      return { reason, notes: [] as string[] }
     }
   }, [nodes, selected])
+  // A new selection starts over.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset on selection change
+  useEffect(() => setMessage(null), [selected])
   if (!merge) return null
-  const { reason } = merge
-  const button = (
-    <button
-      type="button"
-      aria-label="Merge walls"
-      title={reason ? undefined : 'Merge walls'}
-      disabled={readOnly || reason !== null}
-      className={BUTTON}
-      onClick={(event) => {
-        event.stopPropagation()
-        const plan = planWallMerge(useScene.getState().nodes, selected)
-        // Walls drilled from one room go back to it; otherwise the merged wall stays selected.
-        const origin = captureElementActionOrigin(selected)
-        runAsSingleSceneHistoryStep(useScene, () =>
-          useScene.getState().applyNodeChanges(plan.changes),
-        )
-        triggerSFX('sfx:structure-build')
-        if (origin) completeElementAction(origin)
-        else useViewer.getState().setSelection({ selectedIds: [plan.wallId] })
-      }}
-    >
-      <FoldHorizontal className="size-4" />
-    </button>
-  )
-  if (!reason) return button
-  // A disabled button gets no hover events, so the reason hangs off a wrapper.
+  const { reason, notes } = merge
+  const doMerge = () => {
+    const plan = planWallMerge(useScene.getState().nodes, selected)
+    // Walls drilled from one room go back to it; otherwise the merged wall stays selected.
+    const origin = captureElementActionOrigin(selected)
+    runAsSingleSceneHistoryStep(useScene, () => useScene.getState().applyNodeChanges(plan.changes))
+    triggerSFX('sfx:structure-build')
+    setMessage(null)
+    if (origin) completeElementAction(origin)
+    else useViewer.getState().setSelection({ selectedIds: [plan.wallId] })
+  }
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex">{button}</span>
-      </TooltipTrigger>
-      <TooltipContent side="top">{reason}</TooltipContent>
-    </Tooltip>
+    <>
+      <button
+        type="button"
+        aria-label="Merge walls"
+        title={reason ?? notes[0] ?? 'Merge walls'}
+        disabled={readOnly}
+        className={cn(BUTTON, reason && 'opacity-50')}
+        onClick={(event) => {
+          event.stopPropagation()
+          if (reason) return setMessage(reason)
+          // A note is shown once before merging, so the change is not a surprise.
+          if (notes.length > 0 && message !== notes.join(' ')) return setMessage(notes.join(' '))
+          doMerge()
+        }}
+      >
+        <FoldHorizontal className="size-4" />
+      </button>
+      {message ? (
+        <span
+          className={cn(
+            'max-w-56 self-center px-1.5 text-[11px] leading-tight',
+            reason ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
+          )}
+          role="status"
+        >
+          {reason ? message : `${message} Click again to merge.`}
+        </span>
+      ) : null}
+    </>
   )
 }

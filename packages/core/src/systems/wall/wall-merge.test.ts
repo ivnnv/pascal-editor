@@ -106,17 +106,84 @@ describe('explicit wall merge', () => {
     ).toThrow('These walls have a different height.')
   })
 
-  test('refuses anything that would change the layout', () => {
+  test('a wall meeting the joint stays joined to the merged wall side', () => {
     const a = wall([0, 0], [4, 0])
     const b = wall([4, 0], [8, 0])
     const tee = wall([4, 0], [4, 3])
-    expect(() => planWallMerge(map([a, b, tee]), [a.id, b.id])).toThrow('Another wall')
+    const { changes, wallId } = planWallMerge(map([a, b, tee]), [a.id, b.id])
+    const merged = changes.update.find((u) => u.id === wallId)?.data as WallNode
+    expect([merged.start, merged.end]).toEqual([
+      [0, 0],
+      [8, 0],
+    ])
+    expect(changes.update.some((u) => u.id === tee.id)).toBe(false)
+  })
+
+  test('a slight bend is straightened, and the T moves onto the straight line', () => {
+    const a = wall([0, 0], [4, 0.03])
+    const b = wall([4, 0.03], [8, 0])
+    const tee = wall([4, 0.03], [4, 3])
+    const { changes, wallId } = planWallMerge(map([a, b, tee]), [a.id, b.id])
+    const merged = changes.update.find((u) => u.id === wallId)?.data as WallNode
+    expect([merged.start, merged.end]).toEqual([
+      [0, 0],
+      [8, 0],
+    ])
+    const moved = changes.update.find((u) => u.id === tee.id)?.data as WallNode
+    expect(moved.start[1]).toBeCloseTo(0)
+  })
+
+  test('different thicknesses keep the longest wall one, with a note', () => {
+    const a = wall([0, 0], [6, 0])
+    const thick = wall([6, 0], [8, 0], { thickness: 0.3 })
+    const { changes, wallId, notes } = planWallMerge(map([a, thick]), [a.id, thick.id])
+    const merged = changes.update.find((u) => u.id === wallId)?.data as WallNode
+    expect(merged.thickness).toBe(a.thickness ?? 0.2)
+    expect(notes).toHaveLength(1)
+  })
+
+  test('a wall meeting the middle of a straightened wall follows it onto the line', () => {
+    const a = wall([0, 0], [40, 0.3])
+    const b = wall([40, 0.3], [80, 0])
+    const branch = wall([20, 0.15], [20, 5])
+    const { changes } = planWallMerge(map([a, b, branch]), [a.id, b.id])
+    const moved = changes.update.find((u) => u.id === branch.id)?.data as WallNode
+    expect(moved.start[1]).toBeCloseTo(0)
+  })
+
+  test('each joint is judged by its own bend', () => {
+    const at = (deg: number, from: [number, number]): [number, number] => [
+      from[0] + Math.cos((deg * Math.PI) / 180) * 4,
+      from[1] + Math.sin((deg * Math.PI) / 180) * 4,
+    ]
+    const p1 = at(0, [0, 0])
+    const p2 = at(0.8, p1)
+    const p3 = at(1.6, p2)
+    const run = [wall([0, 0], p1), wall(p1, p2), wall(p2, p3)]
+    expect(() =>
+      planWallMerge(
+        map(run),
+        run.map((w) => w.id),
+      ),
+    ).not.toThrow()
+    const q2 = at(0.8, p1)
+    const q3 = at(-0.5, q2)
+    const kinked = [wall([0, 0], p1), wall(p1, q2), wall(q2, q3)]
+    expect(() =>
+      planWallMerge(
+        map(kinked),
+        kinked.map((w) => w.id),
+      ),
+    ).toThrow('straight line')
+  })
+
+  test('refuses anything that would change the layout', () => {
+    const a = wall([0, 0], [4, 0])
     const corner = wall([4, 0], [4, 4])
     expect(() => planWallMerge(map([a, corner]), [a.id, corner.id])).toThrow('straight line')
-    const thick = wall([4, 0], [8, 0], { thickness: 0.3 })
-    expect(() => planWallMerge(map([a, thick]), [a.id, thick.id])).toThrow(
-      'These walls have a different thickness.',
-    )
+    const b = wall([4, 0], [8, 0])
+    const branch = wall([4, 0], [4, -3])
+    expect(() => planWallMerge(map([a, b, branch]), [a.id, b.id, branch.id])).toThrow()
     const curved = wall([4, 0], [8, 0], { curveOffset: 0.5 })
     expect(() => planWallMerge(map([a, curved]), [a.id, curved.id])).toThrow('straight walls')
     const apart = wall([5, 0], [8, 0])
