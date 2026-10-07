@@ -778,6 +778,7 @@ export {
   type SlabPlanSnapInput,
   type SlabPlanSnapResult,
 } from './lib/slab-plan-snap'
+export { useSnappingHold } from './lib/snapping-hold'
 export {
   cycleSnappingModeIn,
   getSnappingModeLabel,

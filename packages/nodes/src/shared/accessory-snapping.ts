@@ -1,8 +1,8 @@
-import { useEditor } from '@pascal-app/editor'
+import { useEditor, useSnappingHold } from '@pascal-app/editor'
 import { findNearestPort3D, findNearestPortXZ, type ScenePort } from './ports'
 
 export function subscribeAccessorySnapping(refresh: () => void): () => void {
-  return useEditor.subscribe((state, previous) => {
+  const stopMode = useEditor.subscribe((state, previous) => {
     if (
       state.snappingModeByContext !== previous.snappingModeByContext ||
       state.gridSnapStep !== previous.gridSnapStep
@@ -10,6 +10,12 @@ export function subscribeAccessorySnapping(refresh: () => void): () => void {
       refresh()
     }
   })
+  // Holding or letting go of Shift switches snapping as much as the mode does.
+  const stopHold = useSnappingHold.subscribe(refresh)
+  return () => {
+    stopMode()
+    stopHold()
+  }
 }
 
 export function snapAccessoryPoint(
