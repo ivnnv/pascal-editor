@@ -13,6 +13,7 @@ import {
   type WallPlanPoint,
 } from '@pascal-app/core'
 import {
+  getActiveSnappingMode,
   getFloorplanWallThickness,
   getSegmentGridStep,
   isSegmentLongEnough,
@@ -25,8 +26,10 @@ import {
   buildBridgeWallCreates,
   buildBridgeWallPreviews,
   getLinkedWallSnapshots,
+  getWallMoveAlignTargets,
   getWallsAfterUpdates,
   type LinkedWallSnapshot,
+  snapWallMoveProjection,
   stripWallIsNewMetadata,
 } from './move-shared'
 
@@ -72,6 +75,20 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
   // degenerate zero-length walls; we fall through to free motion in
   // that case (the wall is going to be deleted anyway).
   const moveAxis = getPerpendicularWallMoveAxis(originalStart, originalEnd)
+  const originalProj = moveAxis
+    ? originalCenter[0] * moveAxis[0] + originalCenter[1] * moveAxis[1]
+    : 0
+  // The drag can always land back where it started, or in line with another wall.
+  const alignTargets = moveAxis
+    ? getWallMoveAlignTargets(
+        originalProj,
+        moveAxis,
+        Object.values(useScene.getState().nodes).filter(
+          (other): other is WallNode =>
+            other.type === 'wall' && other.parentId === node.parentId && other.id !== node.id,
+        ),
+      )
+    : []
   const isNew = !!(node.metadata as { isNew?: unknown } | null)?.isNew
 
   const linkedOriginals: LinkedWallSnapshot[] = isNew
@@ -176,9 +193,16 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       let dx: number
       let dz: number
       if (moveAxis) {
-        const originalProj = originalCenter[0] * moveAxis[0] + originalCenter[1] * moveAxis[1]
         const rawProj = originalProj + rawDx * moveAxis[0] + rawDz * moveAxis[1]
-        const snappedProj = snapScalarToGrid(rawProj, step)
+        const snappedProj =
+          getActiveSnappingMode() === 'off'
+            ? rawProj
+            : snapWallMoveProjection(
+                rawProj,
+                alignTargets,
+                step,
+                getActiveSnappingMode() === 'smart',
+              )
         const perpDelta = snappedProj - originalProj
         dx = moveAxis[0] * perpDelta
         dz = moveAxis[1] * perpDelta

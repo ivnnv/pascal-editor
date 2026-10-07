@@ -19,6 +19,7 @@ import {
 import {
   CursorSphere,
   formatAngleRadians,
+  getActiveSnappingMode,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
   isAlignmentGuideActive,
@@ -28,6 +29,7 @@ import {
   MeasurementPill,
   markToolCancelConsumed,
   resolveEndpointWallSplit,
+  snapCornerToAngle,
   snapWallDraftPointDetailed,
   triggerSFX,
   useAlignmentGuides,
@@ -41,6 +43,7 @@ import { Html } from '@react-three/drei'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
+import { snapWallEndpointToExtension, snapWallEndpointToOrigin } from './move-shared'
 
 /**
  * Wall endpoint move tool (kind-owned).
@@ -448,6 +451,49 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
           )
       } else {
         useAlignmentGuides.getState().clear()
+      }
+      // The corner can always go back where it started, or keep its x / z line,
+      // unless it is joining another wall.
+      if (getActiveSnappingMode() !== 'off' && !snapResult.snap) {
+        alignedPoint = snapWallEndpointToOrigin(planPoint, alignedPoint, movingOriginalPoint)
+      }
+      let onExtension = false
+      // Or onto another wall's continuation. Its guide is in plan coordinates,
+      // so only the floor plan draws it.
+      if (!snapResult.snap && isMagneticSnapActive()) {
+        const ignored = altPressedRef.current ? [nodeId] : [nodeId, ...movingLinkedWallIds]
+        const extension = snapWallEndpointToExtension(
+          planPoint,
+          alignedPoint,
+          movingOriginalPoint,
+          levelWalls.filter((wall) => !ignored.includes(wall.id)),
+        )
+        if (extension) {
+          alignedPoint = extension.point
+          onExtension = true
+        }
+      }
+      // The corner squares against the walls that move with it, as in the plan.
+      const atOrigin =
+        alignedPoint[0] === movingOriginalPoint[0] && alignedPoint[1] === movingOriginalPoint[1]
+      if (
+        getActiveSnappingMode() !== 'off' &&
+        !snapResult.snap &&
+        !altPressedRef.current &&
+        !atOrigin &&
+        // A corner on another wall's continuation keeps that line.
+        !onExtension
+      ) {
+        let best: { point: WallPlanPoint; diff: number } | null = null
+        for (const wall of linkedOriginalsRef.current) {
+          if (!movingLinkedWallIds.includes(wall.id)) continue
+          const far: WallPlanPoint = samePoint(wall.start, movingOriginalPoint)
+            ? wall.end
+            : wall.start
+          const candidate = snapCornerToAngle(alignedPoint, fixedPoint, far)
+          if (candidate && (!best || candidate.diff < best.diff)) best = candidate
+        }
+        if (best) alignedPoint = best.point
       }
 
       if (
