@@ -29,6 +29,7 @@ import {
   MeasurementPill,
   markToolCancelConsumed,
   resolveEndpointWallSplit,
+  snapCornerToAngle,
   snapWallDraftPointDetailed,
   triggerSFX,
   useAlignmentGuides,
@@ -467,6 +468,26 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
           levelWalls.filter((wall) => !ignored.includes(wall.id)),
         )
         if (extension) alignedPoint = extension.point
+      }
+      // The corner squares against the walls that move with it, as in the plan.
+      const atOrigin =
+        alignedPoint[0] === movingOriginalPoint[0] && alignedPoint[1] === movingOriginalPoint[1]
+      if (
+        getActiveSnappingMode() !== 'off' &&
+        !snapResult.snap &&
+        !altPressedRef.current &&
+        !atOrigin
+      ) {
+        let best: { point: WallPlanPoint; diff: number } | null = null
+        for (const wall of linkedOriginalsRef.current) {
+          if (!movingLinkedWallIds.includes(wall.id)) continue
+          const far: WallPlanPoint = samePoint(wall.start, movingOriginalPoint)
+            ? wall.end
+            : wall.start
+          const candidate = snapCornerToAngle(alignedPoint, fixedPoint, far)
+          if (candidate && (!best || candidate.diff < best.diff)) best = candidate
+        }
+        if (best) alignedPoint = best.point
       }
 
       if (

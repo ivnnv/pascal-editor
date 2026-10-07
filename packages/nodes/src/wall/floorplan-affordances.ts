@@ -323,7 +323,9 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           : linkedWalls.filter((w) => movingLinkedWallIds.includes(w.id))
         const farEnd = (w: (typeof linkedWalls)[number]): WallPlanPoint =>
           pointsEqual(w.start, movingOriginal) ? w.end : w.start
-        if (getActiveSnappingMode() !== 'off' && !snapResult.snap) {
+        // Back where it started stays put, so a drag there and back changes nothing.
+        const atOrigin = placed[0] === movingOriginal[0] && placed[1] === movingOriginal[1]
+        if (getActiveSnappingMode() !== 'off' && !snapResult.snap && !atOrigin) {
           // The nearest step across the moving walls, not the first one listed.
           let best: { point: WallPlanPoint; diff: number } | null = null
           for (const wall of movingWalls) {
