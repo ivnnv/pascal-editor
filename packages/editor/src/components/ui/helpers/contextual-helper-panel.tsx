@@ -1,4 +1,5 @@
 import { Icon } from '@iconify/react'
+import { useSnappingHold } from '../../../lib/snapping-hold'
 import type { ToolHint } from '@pascal-app/core'
 import {
   Fragment,
@@ -31,6 +32,7 @@ import {
   cycleSnappingModeIn,
   resolveSnapFlags,
   type SnapContext,
+  type SnappingMode,
 } from '../../../lib/snapping-mode'
 import { cn } from '../../../lib/utils'
 import useEditor, { type GridSnapStep } from '../../../store/use-editor'
@@ -193,15 +195,45 @@ const SNAPPING_MODE_LABELS = {
 
 const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
 
+const snappingLabel = (mode: SnappingMode, held: boolean) =>
+  held ? 'Snapping: Off (holding Shift)' : `Snapping: ${SNAPPING_MODE_LABELS[mode]}`
+
 function nextGridSnapStep(step: GridSnapStep): GridSnapStep {
   const index = GRID_SNAP_STEPS.indexOf(step)
   return GRID_SNAP_STEPS[(index + 1) % GRID_SNAP_STEPS.length] ?? GRID_SNAP_STEPS[0]!
+}
+
+/**
+ * The snapping mode on its own, at the bottom of the viewer, while the hints
+ * panel that normally shows it is closed or folded: the mode decides where
+ * things land, so it should never be invisible.
+ */
+function SnappingPill({ context }: { context: SnapContext }) {
+  const snappingMode = useEditor((s) => s.snappingModeByContext[context])
+  const setSnappingMode = useEditor((s) => s.setSnappingMode)
+  const held = useSnappingHold((s) => s.held)
+  return (
+    <button
+      aria-label={snappingLabel(snappingMode, held)}
+      className="pointer-events-auto fixed bottom-24 left-1/2 z-40 flex -translate-x-1/2 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-background/95 px-3 py-1 text-muted-foreground text-xs shadow-lg backdrop-blur-md hover:text-foreground"
+      onClick={() => {
+        setSnappingMode(context, cycleSnappingModeIn(context, snappingMode))
+        sfxEmitter.emit('sfx:grid-snap')
+      }}
+      title="Snapping mode — click to cycle, hold Shift to place freely"
+      type="button"
+    >
+      <Icon height={13} icon={SNAPPING_MODE_ICONS[held ? 'off' : snappingMode]} width={13} />
+      {snappingLabel(snappingMode, held)}
+    </button>
+  )
 }
 
 // The active interaction's snapping controls, scoped to its context (wall / item
 // / polygon) so each action shows only the modes that make sense for it.
 function SnappingChips({ context }: { context: SnapContext }) {
   const snappingMode = useEditor((s) => s.snappingModeByContext[context])
+  const held = useSnappingHold((s) => s.held)
   const setSnappingMode = useEditor((s) => s.setSnappingMode)
   const gridSnapStep = useEditor((s) => s.gridSnapStep)
   const setGridSnapStep = useEditor((s) => s.setGridSnapStep)
@@ -211,16 +243,16 @@ function SnappingChips({ context }: { context: SnapContext }) {
   return (
     <>
       <ChipRow
-        ariaLabel={`Snapping: ${SNAPPING_MODE_LABELS[snappingMode]}`}
+        ariaLabel={snappingLabel(snappingMode, held)}
         guideTarget="snap-mode"
-        icon={SNAPPING_MODE_ICONS[snappingMode]}
-        label={`Snapping: ${SNAPPING_MODE_LABELS[snappingMode]}`}
+        icon={SNAPPING_MODE_ICONS[held ? 'off' : snappingMode]}
+        label={snappingLabel(snappingMode, held)}
         onClick={() => {
           setSnappingMode(context, cycleSnappingModeIn(context, snappingMode))
           sfxEmitter.emit('sfx:grid-snap')
         }}
         shortcut="Shift"
-        tooltip="Snapping mode — click or press Shift to cycle"
+        tooltip="Snapping mode — click to cycle, hold Shift to place freely"
       />
       {gridActive ? (
         <ChipRow
@@ -617,7 +649,8 @@ export function ContextualHelperPanel({
     if (closedFor && closedFor !== panelKey) useHudPreferences.getState().closeFor(null)
   }, [closedFor, panelKey])
   if (hints.length === 0 && !hasChips) return null
-  if (!showHints || closedFor === panelKey) return null
+  const pill = snapContext ? <SnappingPill context={snapContext} /> : null
+  if (!showHints || closedFor === panelKey) return pill
 
   const close = () => {
     if (dontShowAgain) useHudPreferences.getState().setShowHints(false)
@@ -687,5 +720,13 @@ export function ContextualHelperPanel({
       )}
     </div>
   )
-  return position ? createPortal(card, document.body) : card
+  const placed = position ? createPortal(card, document.body) : card
+  return collapsed && pill ? (
+    <>
+      {placed}
+      {pill}
+    </>
+  ) : (
+    placed
+  )
 }

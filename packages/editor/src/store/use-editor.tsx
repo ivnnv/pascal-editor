@@ -54,6 +54,7 @@ import {
   type PaintScope,
 } from '../lib/paint-scope'
 import { type RoomKey, sameRoom } from '../lib/room-selection'
+import { useSnappingHold } from '../lib/snapping-hold'
 import {
   cycleSnappingModeIn,
   defaultSnappingModeFor,
@@ -1736,7 +1737,7 @@ export function isGridSnapActive(): boolean {
  * snapping to grid / angles / off, and only snaps to them in `'lines'` mode.
  */
 export function isAlignmentGuideActive(): boolean {
-  return getActiveSnapContext() !== null
+  return getActiveSnapContext() !== null && !useSnappingHold.getState().held
 }
 
 /**
@@ -1787,7 +1788,7 @@ export function getContinuation(context: ContinuationContext): ContinuationMode 
  */
 export function getActiveSnappingMode(): SnappingMode {
   const context = getActiveSnapContext()
-  if (!context) return 'off'
+  if (!context || useSnappingHold.getState().held) return 'off'
   return useEditor.getState().snappingModeByContext[context]
 }
 

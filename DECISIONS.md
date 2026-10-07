@@ -41,7 +41,7 @@ Each entry: decision · why · enforced by · revisit when. Detail and examples 
 
 **E-003 Old scenes always load.** A schema change ships its load/migration path in the same PR; a floor-plate migration keeps visible area within 1 %. · Why: scenes are user data, some years old. · Enforced: `core/src/utils/*corpus*.test.ts`, `frozen-floor-gate.test.ts`. · Revisit: never.
 
-**E-004 Snapping is a visible per-context mode.** Shift *tap* cycles the mode; Alt *hold* forces the raw cursor past snapping and collisions. No held-Shift bypass; never read `event.shiftKey` for snapping; grid steps are gated on `isGridSnapActive()`; snappable kinds declare `snapProfile`. · Why: hidden held keys are undiscoverable and un-portable to 2D. · Enforced: `review-architecture` §F. · See `wiki/architecture/tools.md`, `interaction-scope.md`.
+**E-004 Snapping is a visible per-context mode.** The mode is changed from its chip (or the snapping pill when the hints panel is hidden), never by a key tap; holding Shift turns snapping off while held, and the chip says so; Alt *hold* forces the raw cursor past snapping and collisions. Never read `event.shiftKey` for snapping (the held state lives in `useSnappingHold`); grid steps are gated on `isGridSnapActive()`; snappable kinds declare `snapProfile`. · Why: a Shift tap, also used to add to a selection, changed the mode unnoticed; the mode is always shown, so a held key is discoverable. · Enforced: `review-architecture` §F. · See `wiki/architecture/tools.md`, `interaction-scope.md`.
 
 **E-005 Interaction state has one owner.** "What the user is doing" lives in `useInteractionScope` (`begin / update / end / endIf`), not in new `useEditor` booleans. · Enforced: `review-architecture` §F.
 
