@@ -7,6 +7,8 @@ export type JointAngle = {
   deg: number
   // Unit vector into the angle, where its badge sits.
   bisector: { x: number; z: number }
+  // Distance (m) along the bisector to where the walls' inner faces meet.
+  clearance: number
 }
 
 const useJointAngle = create<{ angles: JointAngle[]; set: (angles: JointAngle[]) => void }>(

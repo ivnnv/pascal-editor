@@ -25,6 +25,7 @@ import {
   isAlignmentGuideActive,
   isAngleSnapActive,
   isMagneticSnapActive,
+  isOnPlanAxis,
   isSegmentLongEnough,
   MeasurementPill,
   markToolCancelConsumed,
@@ -482,7 +483,9 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         !altPressedRef.current &&
         !atOrigin &&
         // A corner on another wall's continuation keeps that line.
-        !onExtension
+        !onExtension &&
+        // A wall already true to a plan axis keeps it.
+        !isOnPlanAxis(fixedPoint, alignedPoint)
       ) {
         let best: { point: WallPlanPoint; diff: number } | null = null
         for (const wall of linkedOriginalsRef.current) {

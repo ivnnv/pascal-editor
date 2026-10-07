@@ -196,9 +196,10 @@ const samePlanPoint = (a: WallPlanPoint, b: WallPlanPoint) =>
 const wrapAngle = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle))
 
 /**
- * Pulls `point` onto a 15° step relative to a wall already joined at `start`
- * (the nearest step across all such walls), so a corner squares or mitres
- * against that wall however the plan is turned.
+ * Pulls `point` onto the plan's 0/45/90° axes when near one, otherwise onto a
+ * 15° step relative to a wall already joined at `start` (the nearest step
+ * across all such walls), so a corner squares against that wall however the
+ * plan is turned.
  */
 function snapToJointAngle(
   point: WallPlanPoint,
@@ -213,7 +214,18 @@ function snapToJointAngle(
   const angle = Math.atan2(dz, dx)
   let best: number | null = null
   let bestDiff = Number.POSITIVE_INFINITY
-  for (const direction of jointDirections(start, walls, ignoreWallIds)) {
+  // The plan's own axes win when in reach: a neighbour a touch off square must
+  // not hold the new wall off true horizontal, vertical or 45°.
+  for (let k = 0; k < 8; k++) {
+    const axis = k * (Math.PI / 4)
+    const diff = Math.abs(wrapAngle(angle - axis))
+    if (diff <= FIRM_TOLERANCE && diff < bestDiff) {
+      best = axis
+      bestDiff = diff
+    }
+  }
+  const directions = best === null ? jointDirections(start, walls, ignoreWallIds) : []
+  for (const direction of directions) {
     for (let k = 1; k < 24; k++) {
       const candidate = direction + k * ANGLE_STEP
       const diff = Math.abs(wrapAngle(angle - candidate))
@@ -224,6 +236,9 @@ function snapToJointAngle(
     }
   }
   if (best === null) return null
+  // Square to a neighbour that is itself a hair off an axis: take the axis.
+  const axis = Math.round(best / (Math.PI / 4)) * (Math.PI / 4)
+  if (Math.abs(wrapAngle(best - axis)) <= Math.PI / 180) best = axis
   const dirX = Math.cos(best)
   const dirZ = Math.sin(best)
   const along = dx * dirX + dz * dirZ
@@ -231,11 +246,20 @@ function snapToJointAngle(
   return [start[0] + dirX * length, start[1] + dirZ * length]
 }
 
+/** Whether the wall from `from` to `to` runs exactly along a 0/45/90° plan axis. */
+export function isOnPlanAxis(from: WallPlanPoint, to: WallPlanPoint): boolean {
+  const angle = Math.atan2(to[1] - from[1], to[0] - from[0])
+  const off = Math.abs(wrapAngle(angle - Math.round(angle / (Math.PI / 4)) * (Math.PI / 4)))
+  return Math.hypot(to[0] - from[0], to[1] - from[1]) > 1e-6 && off < 1e-6
+}
+
 /** The angle at `corner` between the walls running to `a` and to `b`, as a badge. */
 export function cornerAngle(
   corner: WallPlanPoint,
   a: WallPlanPoint,
   b: WallPlanPoint,
+  // The thicker of the two walls, so the badge clears their inner faces.
+  thickness = 0.2,
 ): JointAngle | null {
   if (Math.hypot(a[0] - corner[0], a[1] - corner[1]) < 1e-6) return null
   if (Math.hypot(b[0] - corner[0], b[1] - corner[1]) < 1e-6) return null
@@ -249,6 +273,8 @@ export function cornerAngle(
     x: corner[0],
     z: corner[1],
     deg: Math.round((between * 180) / Math.PI),
+    // The plan draws walls a little thicker than they are, hence the margin.
+    clearance: Math.min(1, (thickness + 0.04) / 2 / Math.max(Math.sin(between / 2), 0.2)),
     // A straight run has no inside; the badge sits off to one side.
     bisector:
       length > 1e-6 ? { x: bx / length, z: bz / length } : { x: -Math.sin(ua), z: Math.cos(ua) },
@@ -306,9 +332,16 @@ export function jointAngleAt(
 ): JointAngle | null {
   let best: JointAngle | null = null
   let bestOff = Number.POSITIVE_INFINITY
+  const thickness = Math.max(
+    0.2,
+    ...walls
+      .filter((wall) => !ignoreWallIds?.includes(wall.id))
+      .filter((wall) => samePlanPoint(wall.start, start) || samePlanPoint(wall.end, start))
+      .map((wall) => wall.thickness ?? 0.2),
+  )
   for (const direction of jointDirections(start, walls, ignoreWallIds)) {
     const far: WallPlanPoint = [start[0] + Math.cos(direction), start[1] + Math.sin(direction)]
-    const angle = cornerAngle(start, point, far)
+    const angle = cornerAngle(start, point, far, thickness)
     if (!angle) continue
     const off = Math.abs(angle.deg - 90)
     if (off < bestOff) {
@@ -328,12 +361,15 @@ function snapWallDraftPointDetailedInner(args: SnapWallDraftArgs): WallDraftSnap
     ignoreWallIds,
     bypassSnap = false,
     step: overrideStep,
-    magnetic = true,
+    magnetic: magneticArg = true,
     gridSnap,
     snapRadii,
   } = args
 
   if (bypassSnap) return { point, snap: null, targetWallIds: [] }
+  // Joining corners and walls is not a mode choice: every mode but Off sticks
+  // to them at the full radius; the mode only shapes placement away from them.
+  const magnetic = magneticArg || getActiveSnappingMode() !== 'off'
 
   // Discrete special points (corner / midpoint / crossing) are taken from the
   // raw cursor so an interim grid snap can't mask them. A corner always wins,
@@ -355,6 +391,13 @@ function snapWallDraftPointDetailedInner(args: SnapWallDraftArgs): WallDraftSnap
     start && getActiveSnappingMode() !== 'off'
       ? snapToJointAngle(point, start, walls, ignoreWallIds, step)
       : null
+  const jointDirection = (): { direction?: [number, number] } => {
+    if (!(start && jointPoint)) return {}
+    const length = Math.hypot(jointPoint[0] - start[0], jointPoint[1] - start[1])
+    return length > 1e-9
+      ? { direction: [(jointPoint[0] - start[0]) / length, (jointPoint[1] - start[1]) / length] }
+      : {}
+  }
   const basePoint: WallPlanPoint = jointPoint
     ? jointPoint
     : getActiveSnappingMode() === 'smart'
@@ -377,7 +420,7 @@ function snapWallDraftPointDetailedInner(args: SnapWallDraftArgs): WallDraftSnap
         targetWallIds: wallIdsAtSnapPoint(wallSnap, walls, ignoreWallIds),
       }
     }
-    return { point: basePoint, snap: null, targetWallIds: [] }
+    return { point: basePoint, snap: null, targetWallIds: [], ...jointDirection() }
   }
 
   // Non-magnetic modes (grid / off / angles): connectivity still sticks so a
@@ -405,7 +448,7 @@ function snapWallDraftPointDetailedInner(args: SnapWallDraftArgs): WallDraftSnap
     }
   }
 
-  return { point: basePoint, snap: null, targetWallIds: [] }
+  return { point: basePoint, snap: null, targetWallIds: [], ...jointDirection() }
 }
 
 export function snapWallDraftPoint(args: SnapWallDraftArgs): WallPlanPoint {

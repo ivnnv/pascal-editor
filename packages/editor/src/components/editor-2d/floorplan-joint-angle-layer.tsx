@@ -24,11 +24,19 @@ export function FloorplanJointAngleLayer() {
   return (
     <g data-testid="floorplan-joint-angle" pointerEvents="none">
       {angles.map((angle, index) => {
-        const cx = angle.x + angle.bisector.x * 26 * upp
-        const cz = angle.z + angle.bisector.z * 26 * upp
+        // Past the inner corner of the walls, with room for the badge itself.
+        const offset = angle.clearance + 24 * upp
+        const cx = angle.x + angle.bisector.x * offset
+        const cz = angle.z + angle.bisector.z * offset
         return (
           <g key={`${index}:${angle.x}:${angle.z}`}>
-            <circle cx={cx} cy={cz} fill="#0d9488" fillOpacity={0.92} r={15 * upp} />
+            <circle
+              cx={cx}
+              cy={cz}
+              fill="var(--toggle-on, #8b5cf6)"
+              fillOpacity={0.95}
+              r={15 * upp}
+            />
             <text
               fill="#ffffff"
               fontFamily="-apple-system, system-ui, sans-serif"

@@ -210,6 +210,7 @@ export {
   cornerAngle,
   createWallOnCurrentLevel,
   getSegmentGridStep,
+  isOnPlanAxis,
   isSegmentLongEnough,
   jointAngleAt,
   resolveEndpointWallSplit,

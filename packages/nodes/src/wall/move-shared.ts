@@ -136,6 +136,41 @@ export function snapWallEndpointToExtension(
   }
 }
 
+/** A line a dragged corner may also land on: through `point`, along `along`. */
+export type CornerLine = { point: WallPlanPoint; along: WallPlanPoint; guide?: AlignmentGuide }
+
+/**
+ * A corner whose wall direction an angle snap fixed: it stays on the ray from
+ * `fixed` along `direction`, at the nearest crossing with one of `lines`
+ * within the align tolerance of `snapped` (its own place on that ray), so it
+ * lands on both exactly. With no crossing in reach it stays at `snapped`.
+ */
+export function resolveDirectedCorner(
+  fixed: WallPlanPoint,
+  direction: WallPlanPoint,
+  snapped: WallPlanPoint,
+  lines: readonly CornerLine[],
+): { point: WallPlanPoint; line: CornerLine | null } {
+  let best: { point: WallPlanPoint; line: CornerLine } | null = null
+  let bestDistance = WALL_MOVE_ALIGN_TOLERANCE
+  for (const line of lines) {
+    // fixed + direction * t = line.point + line.along * u
+    const cross = direction[0] * line.along[1] - direction[1] * line.along[0]
+    if (Math.abs(cross) < 1e-6) continue
+    const dx = line.point[0] - fixed[0]
+    const dz = line.point[1] - fixed[1]
+    const t = (dx * line.along[1] - dz * line.along[0]) / cross
+    if (t <= 0) continue
+    const point: WallPlanPoint = [fixed[0] + direction[0] * t, fixed[1] + direction[1] * t]
+    const distance = Math.hypot(point[0] - snapped[0], point[1] - snapped[1])
+    if (distance <= bestDistance) {
+      best = { point, line }
+      bestDistance = distance
+    }
+  }
+  return best ?? { point: snapped, line: null }
+}
+
 /**
  * Snaps a projection onto the nearest alignment target within
  * `WALL_MOVE_ALIGN_TOLERANCE`, else onto the grid (`gridStep <= 0` keeps it raw).
