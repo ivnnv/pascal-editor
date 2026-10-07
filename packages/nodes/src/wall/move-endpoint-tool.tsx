@@ -44,7 +44,13 @@ import { Html } from '@react-three/drei'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
-import { snapWallEndpointToExtension, snapWallEndpointToOrigin } from './move-shared'
+import {
+  type CornerLine,
+  resolveDirectedCorner,
+  snapWallEndpointToExtension,
+  snapWallEndpointToOrigin,
+  WALL_MOVE_ALIGN_TOLERANCE,
+} from './move-shared'
 
 /**
  * Wall endpoint move tool (kind-owned).
@@ -453,25 +459,60 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       } else {
         useAlignmentGuides.getState().clear()
       }
-      // The corner can always go back where it started, or keep its x / z line,
-      // unless it is joining another wall.
-      if (getActiveSnappingMode() !== 'off' && !snapResult.snap) {
-        alignedPoint = snapWallEndpointToOrigin(planPoint, alignedPoint, movingOriginalPoint)
-      }
+      const ignored = altPressedRef.current ? [nodeId] : [nodeId, ...movingLinkedWallIds]
+      const extensionWalls = levelWalls.filter((wall) => !ignored.includes(wall.id))
+      const direction = snapResult.snap ? undefined : snapResult.direction
       let onExtension = false
-      // Or onto another wall's continuation. Its guide is in plan coordinates,
-      // so only the floor plan draws it.
-      if (!snapResult.snap && isMagneticSnapActive()) {
-        const ignored = altPressedRef.current ? [nodeId] : [nodeId, ...movingLinkedWallIds]
-        const extension = snapWallEndpointToExtension(
-          planPoint,
-          alignedPoint,
-          movingOriginalPoint,
-          levelWalls.filter((wall) => !ignored.includes(wall.id)),
-        )
+      if (direction && getActiveSnappingMode() !== 'off') {
+        // As in the plan: the snapped direction holds, and the corner lands
+        // where it crosses the nearest line in reach.
+        const lines: CornerLine[] = []
+        if (Math.abs(planPoint[1] - movingOriginalPoint[1]) <= WALL_MOVE_ALIGN_TOLERANCE)
+          lines.push({ point: movingOriginalPoint, along: [1, 0] })
+        if (Math.abs(planPoint[0] - movingOriginalPoint[0]) <= WALL_MOVE_ALIGN_TOLERANCE)
+          lines.push({ point: movingOriginalPoint, along: [0, 1] })
+        if (alignedPoint[0] !== snappedPoint[0]) lines.push({ point: alignedPoint, along: [0, 1] })
+        if (alignedPoint[1] !== snappedPoint[1]) lines.push({ point: alignedPoint, along: [1, 0] })
+        const extension = isMagneticSnapActive()
+          ? snapWallEndpointToExtension(
+              planPoint,
+              snappedPoint,
+              movingOriginalPoint,
+              extensionWalls,
+            )
+          : null
         if (extension) {
-          alignedPoint = extension.point
-          onExtension = true
+          const { from, to } = extension.guide
+          const length = Math.hypot(to.x - from.x, to.z - from.z)
+          if (length > 1e-9)
+            lines.push({
+              point: [from.x, from.z],
+              along: [(to.x - from.x) / length, (to.z - from.z) / length],
+              guide: extension.guide,
+            })
+        }
+        const resolved = resolveDirectedCorner(fixedPoint, direction, snappedPoint, lines)
+        alignedPoint = resolved.point
+        onExtension = Boolean(resolved.line?.guide)
+      } else {
+        // The corner can always go back where it started, or keep its x / z line,
+        // unless it is joining another wall.
+        if (getActiveSnappingMode() !== 'off' && !snapResult.snap) {
+          alignedPoint = snapWallEndpointToOrigin(planPoint, alignedPoint, movingOriginalPoint)
+        }
+        // Or onto another wall's continuation. Its guide is in plan coordinates,
+        // so only the floor plan draws it.
+        if (!snapResult.snap && isMagneticSnapActive()) {
+          const extension = snapWallEndpointToExtension(
+            planPoint,
+            alignedPoint,
+            movingOriginalPoint,
+            extensionWalls,
+          )
+          if (extension) {
+            alignedPoint = extension.point
+            onExtension = true
+          }
         }
       }
       // The corner squares against the walls that move with it, as in the plan.
@@ -484,6 +525,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         !atOrigin &&
         // A corner on another wall's continuation keeps that line.
         !onExtension &&
+        !direction &&
         // A wall already true to a plan axis keeps it.
         !isOnPlanAxis(fixedPoint, alignedPoint)
       ) {
