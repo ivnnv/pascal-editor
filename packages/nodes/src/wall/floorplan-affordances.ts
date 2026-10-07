@@ -16,17 +16,21 @@ import {
 } from '@pascal-app/core'
 import {
   alignFloorplanDraftPoint,
+  cornerAngle,
   getActiveSnappingMode,
   getSegmentGridStep,
   isAlignmentGuideActive,
   isAngleSnapActive,
   isMagneticSnapActive,
   isSegmentLongEnough,
+  jointAngleAt,
   resolveEndpointWallSplit,
   snapBuildingLocalToWorldGrid,
+  snapCornerToAngle,
   snapScalarToGrid,
   snapWallDraftPointDetailed,
   useAlignmentGuides,
+  useJointAngle,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { snapWallEndpointToExtension, snapWallEndpointToOrigin } from './move-shared'
@@ -271,7 +275,7 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           point: planPoint as WallPlanPoint,
           walls,
           ignoreWallIds: staleWallIds,
-          start: angleLocked ? fixedPoint : undefined,
+          start: fixedPoint,
           angleSnap: angleLocked,
           magnetic: isMagneticSnapActive(),
           gridSnap: (p) => snapBuildingLocalToWorldGrid(p, getSegmentGridStep()),
@@ -312,6 +316,28 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           }
         }
 
+        // The dragged corner squares against the walls that move with it, and
+        // shows the angle it makes there (and at the fixed corner).
+        const movingWalls = modifiers.altKey
+          ? []
+          : linkedWalls.filter((w) => movingLinkedWallIds.includes(w.id))
+        const farEnd = (w: (typeof linkedWalls)[number]): WallPlanPoint =>
+          pointsEqual(w.start, movingOriginal) ? w.end : w.start
+        if (getActiveSnappingMode() !== 'off' && !snapResult.snap) {
+          // The nearest step across the moving walls, not the first one listed.
+          let best: { point: WallPlanPoint; diff: number } | null = null
+          for (const wall of movingWalls) {
+            const candidate = snapCornerToAngle(placed, fixedPoint, farEnd(wall))
+            if (candidate && (!best || candidate.diff < best.diff)) best = candidate
+          }
+          if (best) placed = best.point
+        }
+        const badges = movingWalls.flatMap((wall) => {
+          const angle = cornerAngle(placed, fixedPoint, farEnd(wall))
+          return angle ? [angle] : []
+        })
+        const pivot = jointAngleAt(fixedPoint, placed, walls, staleWallIds)
+        useJointAngle.getState().set(pivot ? [...badges, pivot] : badges)
         const primaryStart: WallPlanPoint = endpoint === 'start' ? placed : fixedPoint
         const primaryEnd: WallPlanPoint = endpoint === 'end' ? placed : fixedPoint
 
