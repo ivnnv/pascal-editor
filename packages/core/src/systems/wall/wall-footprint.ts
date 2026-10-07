@@ -81,3 +81,37 @@ export function getWallPlanFootprint(wallNode: WallNode, miterData: WallMiterDat
 
   return polygon
 }
+
+/**
+ * The edges of a straight wall's plan footprint that are its outline: both
+ * faces, plus a cap at each end not joined to another wall. The mitre edges
+ * between joined walls are left out, so a joint reads as one shape. Null for a
+ * curved wall (its footprint polygon carries the outline itself).
+ */
+export function getWallPlanOutline(
+  wallNode: WallNode,
+  miterData: WallMiterData,
+): Point2D[][] | null {
+  if (isCurvedWall(wallNode)) return null
+  const polygon = getWallPlanFootprint(wallNode, miterData)
+  if (polygon.length < 4) return null
+  const { junctionData } = miterData
+  const startJoined = Boolean(
+    junctionData.get(pointToKey({ x: wallNode.start[0], y: wallNode.start[1] }))?.get(wallNode.id),
+  )
+  const endJoined = Boolean(
+    junctionData.get(pointToKey({ x: wallNode.end[0], y: wallNode.end[1] }))?.get(wallNode.id),
+  )
+  // The footprint runs start-right, end-right, [end closing], end-left, start-left, [start closing].
+  const startRight = polygon[0]!
+  const endRight = polygon[1]!
+  const endLeft = polygon[endJoined ? 3 : 2]!
+  const startLeft = polygon[endJoined ? 4 : 3]!
+  const edges: Point2D[][] = [
+    [startRight, endRight],
+    [endLeft, startLeft],
+  ]
+  if (!endJoined) edges.push([endRight, endLeft])
+  if (!startJoined) edges.push([startLeft, startRight])
+  return edges
+}
