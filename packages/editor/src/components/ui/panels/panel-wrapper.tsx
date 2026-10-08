@@ -12,7 +12,6 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { ChevronDown, ChevronLeft, GripHorizontal, RotateCcw, X } from 'lucide-react'
-import Image from 'next/image'
 import {
   type ComponentType,
   createContext,
@@ -29,6 +28,7 @@ import {
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { clamp, DRAG_MARGIN, getDragBounds, usePanelDrag } from '../../../hooks/use-panel-drag'
 import { IconRefImage } from '../icon-ref'
+import { NodeIconImage } from '../node-icon-image'
 import {
   resolveActiveExtension,
   toggleCard,
@@ -36,10 +36,12 @@ import {
 } from '../../../lib/inspector-card-mode'
 import { cn } from '../../../lib/utils'
 import { useInspectorExpanded, useInspectorHeight } from '../../../lib/inspector-expanded'
+import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
 import { ErrorBoundary } from '../primitives/error-boundary'
 import { ScrollArea } from '../primitives/scroll-area'
 import { useInRightStack } from '../right-stack'
+import { CollectionsPopover } from './collections/collections-popover'
 
 // Body height (px) a resized inspector keeps under its header.
 const MIN_BODY_HEIGHT = 80
@@ -52,6 +54,13 @@ const MIN_BODY_HEIGHT = 80
  * prop still wins over the context.
  */
 export const InspectorFooterContext = createContext<React.ReactNode>(null)
+
+/**
+ * The scene elements the inspector card shows (the selection, or the zone behind a room).
+ * `PanelManager` provides it so every card gets the Collections section; a card mounted
+ * elsewhere (the site panel in the sidebar) is not about the selection and gets none.
+ */
+export const InspectedNodesContext = createContext<AnyNodeId[]>([])
 
 interface PanelWrapperProps {
   title: string
@@ -90,6 +99,7 @@ export function PanelWrapper({
   const isMobile = useIsMobile()
   const inStack = useInRightStack()
   const contextFooter = useContext(InspectorFooterContext)
+  const inspectedIds = useContext(InspectedNodesContext)
   const resolvedFooter = footer ?? contextFooter
 
   const panelRef = useRef<HTMLDivElement>(null)
@@ -270,7 +280,7 @@ export function PanelWrapper({
             )}
             {icon &&
               (typeof icon === 'string' ? (
-                <Image
+                <NodeIconImage
                   alt=""
                   className="shrink-0 object-contain"
                   height={16}
@@ -394,6 +404,15 @@ export function PanelWrapper({
                 </div>
               )}
               {children}
+              {inspectedIds.length > 0 && (
+                <PanelSection title="Collections">
+                  <ActionGroup>
+                    <CollectionsPopover nodeIds={inspectedIds}>
+                      <ActionButton label="Manage collections…" />
+                    </CollectionsPopover>
+                  </ActionGroup>
+                </PanelSection>
+              )}
               {/* Mobile sheet has no header icons to swap modes — keep the
                   plugin sections appended after the kind's controls there. */}
               {isMobile &&
