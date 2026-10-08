@@ -3,12 +3,10 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  calculateLevelMiters,
   closestMeasurementFeatureBinding,
   collectAlignmentAnchors,
   emitter,
   type GeometryContext,
-  getWallPlanFootprint,
   type MeasurementFeatureAnchor,
   type MeasurementSnapKind,
   measurementAngle,
@@ -23,6 +21,13 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  buildMeasureSnapGeometry,
+  type MeasureSnapFace,
+  type MeasureSnapGeometry,
+  type MeasureSnapTarget,
+  resolveMeasureSnap,
+} from '../../lib/measure-snap'
 import { measurementPolygonLabelAnchor } from '../../lib/measurement-label'
 import {
   type FaceLine,
@@ -41,10 +46,7 @@ import {
   MEASUREMENT_ACTIVE_COLOR,
   metersToLinearUnit,
 } from '../../lib/measurements'
-import {
-  clearSurfacePlanSnapFeedback,
-  resolveSurfacePlanPointSnap,
-} from '../../lib/surface-plan-snap'
+import { clearSurfacePlanSnapFeedback } from '../../lib/surface-plan-snap'
 import useEditor from '../../store/use-editor'
 import {
   commitMeasurementDraft,
@@ -432,136 +434,34 @@ export function resolveFloorplanMeasurementAxisSnap(
   }
 }
 
-// AIKAZA: how close the pointer must come to a wall outline corner to land on it.
-const OUTLINE_CORNER_SNAP_DISTANCE_PX = 14
-
-// AIKAZA: how close the pointer must come to a wall outline edge to land on it.
-const OUTLINE_EDGE_SNAP_DISTANCE_PX = 12
-
-type WallOutline = {
-  wallId: string
-  polygon: { x: number; y: number }[]
-  corners: { x: number; y: number }[]
-}
-let wallOutlineCache: { nodes: unknown; levelId: string | null; outlines: WallOutline[] } | null =
-  null
-
-/** Every wall's plan outline on the level, cached until the scene changes. */
-function levelWallOutlines(levelId: string | null): WallOutline[] {
-  const nodes = useScene.getState().nodes
-  if (wallOutlineCache?.nodes === nodes && wallOutlineCache.levelId === levelId)
-    return wallOutlineCache.outlines
-  const walls = Object.values(nodes).filter(
-    (node): node is WallNode => node?.type === 'wall' && (!levelId || node.parentId === levelId),
-  )
-  const miters = calculateLevelMiters(walls)
-  const onWallEnd = (v: { x: number; y: number }) =>
-    walls.some((wall) =>
-      [wall.start, wall.end].some((end) => Math.hypot(end[0] - v.x, end[1] - v.y) < 1e-6),
-    )
-  const outlines = walls.map((wall) => {
-    const polygon = getWallPlanFootprint(wall, miters)
-    // The joint's centre point closes a mitred end; it is not a corner anyone sees.
-    return { wallId: wall.id, polygon, corners: polygon.filter((v) => !onWallEnd(v)) }
-  })
-  wallOutlineCache = { nodes, levelId, outlines }
-  return outlines
-}
-
-/** The wall outline corner nearest the pointer, if close enough. */
-function outlineCornerNearPointer(
-  levelId: string | null,
-  group: SVGGElement,
-  event: MouseEvent | PointerEvent,
-): { point: [number, number]; wallId: string } | null {
-  let best: { point: [number, number]; wallId: string; distance: number } | null = null
-  for (const outline of levelWallOutlines(levelId)) {
-    for (const vertex of outline.corners) {
-      const point: MeasurementPoint = [vertex.x, 0, vertex.y]
-      const distance = screenDistanceToPlanPoint(group, point, event.clientX, event.clientY)
-      if (distance <= OUTLINE_CORNER_SNAP_DISTANCE_PX && (!best || distance < best.distance))
-        best = { point: [vertex.x, vertex.y], wallId: outline.wallId, distance }
-    }
-  }
-  return best && { point: best.point, wallId: best.wallId }
-}
-
-/** The nearest point on a wall's outline to the pointer, if close enough. */
-function outlineEdgeNearPointer(
-  levelId: string | null,
-  pointer: [number, number],
-  group: SVGGElement,
-  event: MouseEvent | PointerEvent,
-): { point: [number, number]; wallId: string } | null {
-  let best: { point: [number, number]; wallId: string; distance: number } | null = null
-  for (const { wallId, polygon } of levelWallOutlines(levelId)) {
-    for (let i = 0; i < polygon.length; i++) {
-      const a = polygon[i]!
-      const b = polygon[(i + 1) % polygon.length]!
-      const dx = b.x - a.x
-      const dz = b.y - a.y
-      const lengthSq = dx * dx + dz * dz
-      if (lengthSq < 1e-12) continue
-      const t = Math.max(
-        0,
-        Math.min(1, ((pointer[0] - a.x) * dx + (pointer[1] - a.y) * dz) / lengthSq),
-      )
-      const point: [number, number] = [a.x + dx * t, a.y + dz * t]
-      const distance = screenDistanceToPlanPoint(
-        group,
-        [point[0], 0, point[1]],
-        event.clientX,
-        event.clientY,
-      )
-      if (distance <= OUTLINE_EDGE_SNAP_DISTANCE_PX && (!best || distance < best.distance))
-        best = { point, wallId, distance }
-    }
-  }
-  return best && { point: best.point, wallId: best.wallId }
-}
-
 // AIKAZA: how close the pointer must come to where a wall face squares up with the previous point.
 const FACE_AXIS_SNAP_DISTANCE_PX = 28
 
-function wallFaceLine(
-  snap: { point: [number, number]; wallSnap: string | null; wallIds: readonly string[] },
-  pointer: [number, number],
-  onFace = false,
-): FaceLine | null {
-  if (snap.wallSnap !== 'wall' && snap.wallSnap !== 'midpoint') return null
-  const wall = useScene.getState().nodes[snap.wallIds[0] as AnyNodeId]
-  if (wall?.type !== 'wall') return null
-  const dx = wall.end[0] - wall.start[0]
-  const dz = wall.end[1] - wall.start[1]
-  const length = Math.hypot(dx, dz)
-  if (length < 1e-9) return null
-  const point = onFace ? snap.point : wallFaceTowardPointer(snap, pointer)
-  const direction: [number, number] = [dx / length, dz / length]
-  // The face spans the wall's length, measured from the snapped point.
-  const t0 = (wall.start[0] - point[0]) * direction[0] + (wall.start[1] - point[1]) * direction[1]
-  return { point, direction, min: t0, max: t0 + length }
+let measureSnapCache: {
+  nodes: unknown
+  levelId: string | null
+  geometry: MeasureSnapGeometry
+} | null = null
+
+/** The level's wall corners and faces a measure can land on, cached until the scene changes. */
+function levelMeasureSnapGeometry(levelId: string | null): MeasureSnapGeometry {
+  const nodes = useScene.getState().nodes
+  if (measureSnapCache?.nodes === nodes && measureSnapCache.levelId === levelId)
+    return measureSnapCache.geometry
+  const walls = Object.values(nodes).filter(
+    (node): node is WallNode => node?.type === 'wall' && (!levelId || node.parentId === levelId),
+  )
+  const geometry = buildMeasureSnapGeometry(walls)
+  measureSnapCache = { nodes, levelId, geometry }
+  return geometry
 }
 
-// AIKAZA: the wall snap lands on a wall's centre line; a measure wants the face
-// on the pointer's side, not the tie the face lookup breaks towards the outer one.
-function wallFaceTowardPointer(
-  snap: { point: [number, number]; wallSnap: string | null; wallIds: readonly string[] },
-  pointer: [number, number],
-): [number, number] {
-  if (snap.wallSnap !== 'wall' && snap.wallSnap !== 'midpoint') return snap.point
-  const wall = useScene.getState().nodes[snap.wallIds[0] as AnyNodeId]
-  if (wall?.type !== 'wall') return snap.point
-  const dx = wall.end[0] - wall.start[0]
-  const dz = wall.end[1] - wall.start[1]
+function faceLineOf(face: MeasureSnapFace): FaceLine | null {
+  const dx = face.b[0] - face.a[0]
+  const dz = face.b[1] - face.a[1]
   const length = Math.hypot(dx, dz)
-  if (length < 1e-9) return snap.point
-  const normal: [number, number] = [-dz / length, dx / length]
-  const side =
-    (pointer[0] - snap.point[0]) * normal[0] + (pointer[1] - snap.point[1]) * normal[1] >= 0
-      ? 1
-      : -1
-  const half = ((wall.thickness ?? 0.1) / 2) * side
-  return [snap.point[0] + normal[0] * half, snap.point[1] + normal[1] * half]
+  if (length < 1e-9) return null
+  return { point: face.a, direction: [dx / length, dz / length], min: 0, max: length }
 }
 
 function isMeasurementKind(
@@ -1051,6 +951,7 @@ export function FloorplanMeasurementToolLayer() {
       return closestIndex
     }
 
+    let heldSnapTarget: MeasureSnapTarget | null = null
     const resolveRawEventPoint = (
       event: MouseEvent | PointerEvent,
       anchorsOverride?: readonly MeasurementPoint[],
@@ -1067,63 +968,42 @@ export function FloorplanMeasurementToolLayer() {
       const projectedPlan = projectedSnap
         ? clientToPlanPoint(group, projectedSnap.point.x, projectedSnap.point.z)
         : null
-      // Measurement anchors always bind to real geometry — the construction
-      // snapping-mode chip doesn't govern this analysis tool. Alt bypasses,
-      // including the projected registry-geometry pull.
-      const surfaceSnap = resolveSurfacePlanPointSnap({
-        rawPoint: [plan.x, plan.z],
-        fallbackPoint:
-          projectedPlan && !event.altKey ? [projectedPlan.x, projectedPlan.z] : [plan.x, plan.z],
-        levelId: activeLevelId,
-        align: false,
-        magnetic: !event.altKey,
-      })
-      // A discrete wall snap (corner / midpoint / crossing) is the strongest
-      // signal; a locked axis must not pull the point off it.
-      // AIKAZA: a wall corner snap lands on a real outline corner near the pointer,
-      // not on the centre-line end it grabs from far away.
-      const corner = event.altKey ? null : outlineCornerNearPointer(activeLevelId, group, event)
-      const cornerMissed =
-        (surfaceSnap.wallSnap === 'endpoint' || surfaceSnap.wallSnap === 'intersection') && !corner
-      // A far-reaching wall-end snap with no corner near, or no wall snap at all: take
-      // the nearest wall outline edge, judged in screen pixels so it works at any zoom.
-      const edgeOnly = cornerMissed || (!corner && !surfaceSnap.wallSnap && !event.altKey)
-      const edge = edgeOnly
-        ? outlineEdgeNearPointer(activeLevelId, [plan.x, plan.z], group, event)
-        : null
-      const discreteWallSnap =
-        corner !== null ||
-        (!cornerMissed &&
-          (surfaceSnap.wallSnap === 'midpoint' || surfaceSnap.wallSnap === 'intersection'))
-      const facePoint: [number, number] = corner
-        ? corner.point
-        : edge
-          ? edge.point
-          : cornerMissed
-            ? [plan.x, plan.z]
-            : wallFaceTowardPointer(surfaceSnap, [plan.x, plan.z])
-      const raw: MeasurementPoint = [facePoint[0], 0, facePoint[1]]
-      // AIKAZA: the snap marker shows where the point lands, never a snap this tool overrode.
-      const markerKind = corner
-        ? 'endpoint'
-        : edge
-          ? 'wall'
-          : cornerMissed
-            ? null
-            : surfaceSnap.wallSnap
-      const markerWallId = corner?.wallId ?? edge?.wallId ?? surfaceSnap.wallIds[0]
-      const targetNodeId = edgeOnly
-        ? (edge?.wallId ?? (cornerMissed ? null : (projectedSnap?.nodeId ?? null)))
-        : (corner?.wallId ?? surfaceSnap.wallIds[0] ?? projectedSnap?.nodeId ?? null)
-      const lastPoint = draft.points.at(-1)
-      // AIKAZA: on a wall face, square up with the previous point where the face crosses its axes.
-      const faceLine = edge
-        ? wallFaceLine(
-            { point: edge.point, wallSnap: 'wall', wallIds: [edge.wallId] },
-            edge.point,
-            true,
+      // AIKAZA: measures snap to what a person sees on the plan: wall outline corners
+      // and faces, caught and released in screen pixels. Alt places the point freely.
+      const groupMatrix = group.getScreenCTM()
+      const pixelsPerMetre = groupMatrix ? Math.hypot(groupMatrix.a, groupMatrix.b) : 100
+      const target = event.altKey
+        ? null
+        : resolveMeasureSnap(
+            levelMeasureSnapGeometry(activeLevelId),
+            [plan.x, plan.z],
+            pixelsPerMetre,
+            heldSnapTarget,
           )
-        : wallFaceLine(surfaceSnap, [plan.x, plan.z])
+      heldSnapTarget = target
+      // Off the walls, other kinds still pull through their projected plan geometry.
+      const offWallSnap =
+        !target &&
+        !event.altKey &&
+        projectedPlan &&
+        projectedSnap &&
+        useScene.getState().nodes[projectedSnap.nodeId as AnyNodeId]?.type !== 'wall'
+          ? projectedPlan
+          : null
+      const snapped: [number, number] = target
+        ? target.point
+        : offWallSnap
+          ? [offWallSnap.x, offWallSnap.z]
+          : [plan.x, plan.z]
+      const raw: MeasurementPoint = [snapped[0], 0, snapped[1]]
+      // A corner is the strongest signal; an axis lock must not pull the point off it.
+      const discreteWallSnap = target?.kind === 'corner'
+      const markerKind = target ? (target.kind === 'corner' ? 'endpoint' : 'wall') : null
+      const markerWallId = target?.wallId
+      const targetNodeId = target?.wallId ?? (offWallSnap ? projectedSnap!.nodeId : null)
+      const lastPoint = draft.points.at(-1)
+      // On a wall face, square up with the previous point where the face crosses its axes.
+      const faceLine = target?.kind === 'face' ? faceLineOf(target.face) : null
       if (faceLine && lastPoint && !event.altKey && !anchorsOverride) {
         const squared = squareOnFace(faceLine, lastPoint).filter(
           (candidate) =>
@@ -1190,7 +1070,7 @@ export function FloorplanMeasurementToolLayer() {
           logMeasure('axis-unverified', {
             plan,
             projectedSnap,
-            surfaceSnap,
+            target,
             discreteWallSnap,
             raw,
             resolved,
@@ -1204,7 +1084,7 @@ export function FloorplanMeasurementToolLayer() {
       logMeasure('resolve', {
         plan,
         projectedSnap,
-        surfaceSnap,
+        target,
         discreteWallSnap,
         raw,
         resolved,
@@ -1370,6 +1250,7 @@ export function FloorplanMeasurementToolLayer() {
       if (event.target !== svg) return
       if (vertexGesture.current) return
       clearSurfacePlanSnapFeedback()
+      heldSnapTarget = null
       const draft = useMeasurementDraft.getState()
       if (!draft.owner || draft.owner === '2d') draft.setHover('2d', null)
     }
@@ -1400,6 +1281,7 @@ export function FloorplanMeasurementToolLayer() {
       consume(event)
       clearVertexGesture(false)
       clearSurfacePlanSnapFeedback()
+      heldSnapTarget = null
     }
 
     const onClick = (event: MouseEvent) => {
@@ -1451,10 +1333,12 @@ export function FloorplanMeasurementToolLayer() {
     const onBlur = () => {
       clearVertexGesture(false)
       clearSurfacePlanSnapFeedback()
+      heldSnapTarget = null
     }
     const onToolCancel = () => {
       clearVertexGesture(false)
       clearSurfacePlanSnapFeedback()
+      heldSnapTarget = null
     }
 
     emitter.on('tool:cancel', onToolCancel)
@@ -1470,6 +1354,7 @@ export function FloorplanMeasurementToolLayer() {
       cancelVertexGesture.current = () => {}
       clearVertexGesture(false)
       clearSurfacePlanSnapFeedback()
+      heldSnapTarget = null
       emitter.off('tool:cancel', onToolCancel)
       svg.removeEventListener('pointerdown', onPointerDown, true)
       svg.removeEventListener('pointermove', onPointerMove, true)
