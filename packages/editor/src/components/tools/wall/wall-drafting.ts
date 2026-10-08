@@ -12,6 +12,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { SNAP_REACH_PX } from '../../../lib/snap-reach'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
 import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
 import {
@@ -19,7 +20,10 @@ import {
   findWallSnapTarget,
   findWallSpecialPointSnap,
   WALL_CONNECT_SNAP_RADIUS,
+  WALL_ENDPOINT_SNAP_RADIUS,
+  WALL_INTERSECTION_SNAP_RADIUS,
   WALL_JOIN_SNAP_RADIUS,
+  WALL_MIDPOINT_SNAP_RADIUS,
   type WallDraftSnapResult,
   type WallPlanPoint,
   type WallSnapRadii,
@@ -117,6 +121,25 @@ type SnapWallDraftArgs = {
   gridSnap?: (point: WallPlanPoint) => WallPlanPoint
   /** Optional magnetic snap radii. Omitted means wall tools keep their defaults. */
   snapRadii?: WallSnapRadii
+  /**
+   * AIKAZA: the plan's metres per screen pixel. Given, the magnetic snaps reach
+   * a fixed distance on screen (never past their usual metres).
+   */
+  planScale?: number | null
+}
+
+// AIKAZA: never reach less than this, so a join still lands when zoomed far in.
+const MIN_PLAN_SNAP_RADIUS = 0.02
+
+function planSnapRadii(metresPerPixel: number): WallSnapRadii {
+  const reach = (px: number, usual: number) =>
+    Math.min(usual, Math.max(MIN_PLAN_SNAP_RADIUS, px * metresPerPixel))
+  return {
+    endpoint: reach(SNAP_REACH_PX.wall.endpoint, WALL_ENDPOINT_SNAP_RADIUS),
+    midpoint: reach(SNAP_REACH_PX.wall.midpoint, WALL_MIDPOINT_SNAP_RADIUS),
+    intersection: reach(SNAP_REACH_PX.wall.intersection, WALL_INTERSECTION_SNAP_RADIUS),
+    wall: reach(SNAP_REACH_PX.wall.wall, WALL_JOIN_SNAP_RADIUS),
+  }
 }
 
 export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSnapResult {
@@ -130,8 +153,10 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
     step: overrideStep,
     magnetic = true,
     gridSnap,
-    snapRadii,
+    snapRadii: explicitRadii,
+    planScale,
   } = args
+  const snapRadii = explicitRadii ?? (planScale ? planSnapRadii(planScale) : undefined)
 
   if (bypassSnap) return { point, snap: null, targetWallIds: [] }
 

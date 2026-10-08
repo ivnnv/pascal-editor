@@ -16,6 +16,7 @@ import {
 } from '@pascal-app/core'
 import {
   alignFloorplanDraftPoint,
+  getPlanSnapScale,
   getSegmentGridStep,
   isAlignmentGuideActive,
   isAngleSnapActive,
@@ -273,6 +274,8 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           angleSnap: angleLocked,
           magnetic: isMagneticSnapActive(),
           gridSnap: (p) => snapBuildingLocalToWorldGrid(p, getSegmentGridStep()),
+          // AIKAZA: reach a fixed distance on screen, whatever the zoom.
+          planScale: getPlanSnapScale(),
         })
         // Figma-style alignment on the dragged corner — snaps it onto another
         // object's edge / wall face and publishes a guide. The guide is

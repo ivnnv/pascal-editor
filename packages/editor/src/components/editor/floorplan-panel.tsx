@@ -125,6 +125,7 @@ import { selectRoomFromHit } from '../../lib/room-selection-commands'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL, siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
+import { getPlanSnapScale } from '../../lib/snap-reach'
 import {
   cancelPendingZonePaint,
   focusedUnitNode,
@@ -188,7 +189,7 @@ import {
   RotationAngleOverlay,
 } from '../editor-2d/renderers/floorplan-registry-layer'
 import { FloorplanVoronoiLayer } from '../editor-2d/renderers/floorplan-voronoi-layer'
-import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
+import { buildSvgPolylinePath, formatPolygonPath } from '../editor-2d/svg-paths'
 import { snapToHalf } from '../tools/item/placement-math'
 import {
   isBoxSelectPointerSuppressed,
@@ -8356,6 +8357,7 @@ export function FloorplanPanel({
           walls,
           ignoreWallIds: [dragState.wallId],
           magnetic: isMagneticSnapActive(),
+          planScale: getPlanSnapScale(),
         })
         const snappedPoint = snapResult.point
         // Magnetic beacon at the endpoint when it locked onto existing geometry.
@@ -9494,6 +9496,7 @@ export function FloorplanPanel({
         start: draftStart ?? undefined,
         angleSnap: wallAngleSnap,
         magnetic: isMagneticSnapActive(),
+        planScale: getPlanSnapScale(),
       })
       const wallSnapped = wallSnap.point
       // Locked onto existing geometry (corner / midpoint / crossing / edge) →
@@ -9898,7 +9901,12 @@ export function FloorplanPanel({
       angleSnap?: boolean
       bypassSnap?: boolean
       step?: number
-    }) => snapWallDraftPoint({ ...args, magnetic: isMagneticSnapActive() }),
+    }) =>
+      snapWallDraftPoint({
+        ...args,
+        magnetic: isMagneticSnapActive(),
+        planScale: getPlanSnapScale(),
+      }),
     [],
   )
   const { handleBackgroundPlacementClick } = useFloorplanBackgroundPlacement({

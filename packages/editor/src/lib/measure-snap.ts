@@ -4,6 +4,7 @@ import {
   isCurvedWall,
   type WallNode,
 } from '@pascal-app/core'
+import { SNAP_REACH_PX } from './snap-reach'
 
 // AIKAZA: the measure tool's own snap targets: the corners and faces a person
 // sees on a wall's plan outline, never centre lines or joint centres.
@@ -18,11 +19,7 @@ export type MeasureSnapTarget =
   | { kind: 'corner'; point: Plan; wallId: string }
   | { kind: 'face'; point: Plan; wallId: string; face: MeasureSnapFace }
 
-/** Screen pixels to catch a target, and the further distance a caught target holds to. */
-export const MEASURE_SNAP_PX = {
-  corner: { catch: 14, release: 20 },
-  face: { catch: 12, release: 18 },
-} as const
+const MEASURE_SNAP_PX = SNAP_REACH_PX.measure
 
 /** Visible outline corners and faces of the given walls. */
 export function buildMeasureSnapGeometry(walls: readonly WallNode[]): MeasureSnapGeometry {
