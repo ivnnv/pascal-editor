@@ -31,7 +31,10 @@ const below = wall('wall_below', fixed, [1.2058545351028442, -0.1487636566162109
 const left = wall('wall_left', [1.243, -3.614], [-0.75, -3.614])
 const right = wall('wall_right', [1.243, -3.614], [5.692649475069399, -3.61442296878409])
 
+let savedEditor: ReturnType<typeof useEditor.getState>
+
 beforeEach(() => {
+  savedEditor = useEditor.getState()
   if (!nodeRegistry.get('wall')) registerNode(wallDefinition)
   useScene.setState({
     nodes: Object.fromEntries([dragged, below, left, right].map((w) => [w.id, w])) as never,
@@ -50,6 +53,10 @@ beforeEach(() => {
 afterEach(() => {
   useInteractionScope.getState().end()
   useLiveNodeOverrides.getState().clearAll()
+  useEditor.setState({
+    mode: savedEditor.mode,
+    snappingModeByContext: savedEditor.snappingModeByContext,
+  })
 })
 
 test('dragging the top corner near vertical lands it exactly vertical, on the top walls line', () => {
