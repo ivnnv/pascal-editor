@@ -41,6 +41,17 @@ const lineStyle = (stroke: string): FloorplanStyle => ({
   strokeLinejoin: 'round',
 })
 
+// AIKAZA: a measure's direction against the plan axes, to one decimal so a line
+// a fraction of a degree off straight shows it.
+function lineAngleText(start: readonly number[], end: readonly number[]): string {
+  const degrees = (Math.atan2(-(end[2]! - start[2]!), end[0]! - start[0]!) * 180) / Math.PI
+  // Fold into (-90°, 90°] so a line a hair off horizontal reads -0.1°, not 179.9°.
+  let folded = ((degrees % 180) + 180) % 180
+  if (folded > 90) folded -= 180
+  const rounded = Math.round(folded * 10) / 10
+  return `${rounded === 0 ? 0 : rounded}°`
+}
+
 export function buildMeasurementFloorplan(
   node: MeasurementNode,
   ctx: GeometryContext,
@@ -51,7 +62,8 @@ export function buildMeasurementFloorplan(
   const metricNotation = readFloorplanContext(ctx).metricNotation
   const resolved = resolveMeasurementNode(node, (id) => ctx.resolve(id))
   const measurement = resolved.payload
-  const selected = ctx.viewState?.selected || ctx.viewState?.highlighted
+  // AIKAZA: hovering lights the measure up, so you see what a click will select.
+  const selected = ctx.viewState?.selected || ctx.viewState?.highlighted || ctx.viewState?.hovered
   const editable = ctx.viewState?.selected === true
   const stroke = measurementFloorplanPresentationColor(
     resolved.dangling.length > 0,
@@ -116,7 +128,7 @@ export function buildMeasurementFloorplan(
             appearance: 'outlined',
             cx: (x1 + x2) / 2,
             cy: (y1 + y2) / 2,
-            text: `${statusPrefix}${formatLinearMeasurement(measurementDistance(start, end), unit, metricNotation)}`,
+            text: `${statusPrefix}${formatLinearMeasurement(measurementDistance(start, end), unit, metricNotation)}${editable ? ` · ${lineAngleText(start, end)}` : ''}`,
             angle: Math.atan2(y2 - y1, x2 - x1),
             offsetPx: 14,
           },

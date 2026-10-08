@@ -2494,7 +2494,11 @@ export function buildFloorplanEntryGeometry({
   const { rest: overlay, handles } = overlayWithHandles
     ? splitFloorplanHandles(overlayWithHandles)
     : { rest: null, handles: null }
-  const entry: CacheEntry = { deps, base, overlay, handles, node: effectiveNode }
+  // AIKAZA: a measure paints and hit-tests above everything, rooms and walls included.
+  const entry: CacheEntry =
+    effectiveNode?.type === 'measurement'
+      ? { deps, base: null, overlay: null, handles: geometry, node: effectiveNode }
+      : { deps, base, overlay, handles, node: effectiveNode }
   geometryCache.set(nodeId, entry)
   return entry
 }
@@ -2631,7 +2635,8 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
             pointerEvents={isMarqueeSelectionActive ? 'none' : (g.pointerEvents ?? 'stroke')}
             stroke="transparent"
             strokeLinecap="round"
-            strokeWidth={g.strokeWidthPx * unitsPerPixel}
+            // AIKAZA: a non-scaling stroke is already in screen pixels.
+            strokeWidth={g.strokeWidthPx}
             style={{ cursor: g.cursor ?? 'pointer' }}
             vectorEffect="non-scaling-stroke"
             x1={g.x1}

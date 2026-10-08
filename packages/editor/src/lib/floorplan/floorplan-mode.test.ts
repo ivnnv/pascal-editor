@@ -48,7 +48,7 @@ describe('floor-plan mode', () => {
     ).toBe(expertVisibility)
   })
 
-  test('keeps Default clean until an item is selected', () => {
+  test('keeps Default clean until an item is selected, except the measures drawn', () => {
     expect(
       resolveFloorplanAnnotationVisibility('default', DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY, {
         selected: false,
@@ -58,7 +58,7 @@ describe('floor-plan mode', () => {
       automaticDimensions: false,
       contextualDimensions: false,
       manualDimensions: false,
-      measurements: false,
+      measurements: true,
       openingMarks: false,
       structuralGrids: false,
       roomLabels: true,

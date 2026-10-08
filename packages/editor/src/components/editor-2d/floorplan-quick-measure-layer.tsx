@@ -155,6 +155,16 @@ export function FloorplanQuickMeasureLayer() {
         )
       }
       const point = candidateHasReportRef.current ? pointAtPointer(group, event) : null
+      // DEBUG(measure): remove once the measure snapping is confirmed.
+      console.log(
+        '[measure:quick]',
+        JSON.stringify({
+          client: [event.clientX, event.clientY],
+          candidateNodeId,
+          hasReport: candidateHasReportRef.current,
+          point,
+        }),
+      )
       updateHover(candidateNodeId && point ? { nodeId: candidateNodeId, point } : null)
     }
     const pointerScheduler = createQuickMeasurementPointerScheduler(processPointerMove)

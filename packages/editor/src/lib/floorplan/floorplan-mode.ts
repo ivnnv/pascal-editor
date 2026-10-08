@@ -54,7 +54,8 @@ export function resolveFloorplanAnnotationVisibility(
     automaticDimensions: false,
     contextualDimensions: selected,
     manualDimensions: selected,
-    measurements: selected,
+    // AIKAZA: a measure is drawn on purpose, so the editor shows it unselected.
+    measurements: interactive,
     openingMarks: false,
     structuralGrids: false,
     roomLabels: true,
