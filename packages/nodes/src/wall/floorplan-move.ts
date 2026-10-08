@@ -6,6 +6,7 @@ import {
   type FloorplanMoveTargetSession,
   getPerpendicularWallMoveAxis,
   getPlannedLinkedWallUpdates,
+  planWallEndRejoins,
   planWallMoveJunctions,
   useLiveNodeOverrides,
   useScene,
@@ -19,6 +20,7 @@ import {
   isSegmentLongEnough,
   snapScalarToGrid,
   useWallMoveGhosts,
+  WALL_CONNECT_SNAP_RADIUS,
   type WallMoveGhostBridge,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -384,11 +386,18 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
         wallCount: Object.values(sceneState.nodes).filter((entry) => entry?.type === 'wall').length,
       })
 
-      sceneState.applyNodeChanges({
-        update: commitUpdates as Array<{ id: AnyNodeId; data: Partial<AnyNode> }>,
-        create: bridgeCreates,
-        delete: Array.from(collapsedLinkedWallIds),
-      })
+      sceneState.applyNodeChanges(
+        planWallEndRejoins(
+          sceneState.nodes,
+          commitUpdates.map(({ id }) => id),
+          WALL_CONNECT_SNAP_RADIUS,
+          {
+            update: commitUpdates as Array<{ id: AnyNodeId; data: Partial<AnyNode> }>,
+            create: bridgeCreates,
+            delete: Array.from(collapsedLinkedWallIds),
+          },
+        ),
+      )
 
       // Drop the live overrides now that the committed scene state
       // matches them — leaving them around would keep the system
