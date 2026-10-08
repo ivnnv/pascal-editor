@@ -1076,7 +1076,8 @@ const useEditor = create<EditorState>()(
         const structureLayer = phase === 'furnish' ? 'elements' : get().structureLayer
         set({
           phase,
-          room: null,
+          // A room is picked from structure and furnish alike; only site drops it.
+          ...(phase === 'site' ? { room: null } : {}),
           hoveredRoom: null,
           structureLayer,
           catalogCategory: wasBuilding && phase === 'furnish' ? 'furniture' : null,
@@ -1321,6 +1322,7 @@ const useEditor = create<EditorState>()(
             selectedId,
           }) ?? get().activePaintTarget
         const activePaintMaterial = resolveActivePaintMaterialFromSelection({
+          materials: useScene.getState().materials,
           nodes: useScene.getState().nodes,
           selectedId,
           selectedMaterialTarget: get().selectedMaterialTarget,
