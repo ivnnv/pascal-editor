@@ -39,6 +39,14 @@ export function rightStackFloors(args: {
   return { inspector, card }
 }
 
+// What the card holds, not `scrollHeight`: that counts the min-height set here,
+// so a card that closed or floated away would keep its old room.
+function cardContentHeight(card: HTMLElement): number {
+  let height = 0
+  for (const child of card.children) height += (child as HTMLElement).offsetHeight
+  return height
+}
+
 /** The inspector's full height: its header plus everything its scroller holds. */
 function inspectorHeights(slot: HTMLElement): { natural: number; header: number } {
   const panel = slot.querySelector<HTMLElement>('[data-panel-wrapper]')
@@ -48,6 +56,9 @@ function inspectorHeights(slot: HTMLElement): { natural: number; header: number 
   if (!scroller) return { natural: panel.offsetHeight, header }
   return { natural: panel.offsetHeight - scroller.clientHeight + scroller.scrollHeight, header }
 }
+
+// Read by the shortcuts card (`contextual-helper-panel.tsx`).
+const INSPECTOR_WIDTH_VAR = '--right-stack-inspector-width'
 
 /**
  * The right-hand column: the shortcuts card shows in full at the bottom, and
@@ -74,10 +85,11 @@ export function RightStack({ inspector, helper }: { inspector: ReactNode; helper
     const fit = () => {
       frame = 0
       const { natural, header } = inspectorHeights(slot)
+      const cardHeight = cardContentHeight(card)
       const floors = rightStackFloors({
         naturalHeight: natural,
         headerHeight: header,
-        cardHeight: card.scrollHeight,
+        cardHeight,
         stackHeight: stack.clientHeight,
       })
       const inspectorMin = `${floors.inspector}px`
@@ -85,14 +97,21 @@ export function RightStack({ inspector, helper }: { inspector: ReactNode; helper
       if (slot.style.minHeight !== inspectorMin) slot.style.minHeight = inspectorMin
       if (card.style.minHeight !== cardMin) card.style.minHeight = cardMin
       // The card is click-through; it takes the pointer only when it has to scroll.
-      const pointer = floors.card < card.scrollHeight ? 'auto' : ''
+      const pointer = floors.card < cardHeight ? 'auto' : ''
       if (card.style.pointerEvents !== pointer) card.style.pointerEvents = pointer
+      // The shortcuts card takes the inspector's width, so the two line up.
+      const width = slot.offsetWidth > 0 ? `${slot.offsetWidth}px` : ''
+      if (stack.style.getPropertyValue(INSPECTOR_WIDTH_VAR) !== width) {
+        if (width) stack.style.setProperty(INSPECTOR_WIDTH_VAR, width)
+        else stack.style.removeProperty(INSPECTOR_WIDTH_VAR)
+      }
     }
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(fit)
     }
     const resize = new ResizeObserver(schedule)
     resize.observe(stack)
+    resize.observe(slot)
     resize.observe(card)
     // Content growing inside the scroller changes no outer size, hence the mutation watch.
     // The same for the card: a new tool swaps its rows without resizing the slot.

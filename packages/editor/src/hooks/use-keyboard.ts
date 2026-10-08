@@ -35,6 +35,7 @@ import { popRoomSelection } from '../lib/room-selection-commands'
 import { copySelectedNodesToEditorClipboard } from '../lib/scene-clipboard'
 import { sfxEmitter } from '../lib/sfx-bus'
 import { openSidebarPanel } from '../lib/sidebar-panel'
+import { useSnappingHold } from '../lib/snapping-hold'
 import { activeSiteNode, clampBrushRadius } from '../lib/terrain-sculpt'
 import { leaveUnitFocus } from '../lib/units'
 import { selectWallDrawVariant } from '../lib/wall-draw-variant'
@@ -312,13 +313,14 @@ export const useKeyboard = ({
     // and is cleared the instant any other key fires, so chords like Ctrl+Z /
     // Ctrl+C never cycle.
     let ctrlTapClean = false
-    let shiftTapClean = false
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') {
-        shiftTapClean = !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey
-      } else {
-        shiftTapClean = false
+      // Holding Shift places freely, without snapping, until it is let go.
+      if (
+        e.key === 'Shift' &&
+        !blocksSnappingShortcut(e.target instanceof HTMLElement ? e.target : null)
+      ) {
+        useSnappingHold.getState().setHeld(true)
       }
 
       if (e.key === 'Control' || e.key === 'Meta') {
@@ -785,16 +787,7 @@ export const useKeyboard = ({
     }
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'Shift') {
-        const wasClean = shiftTapClean
-        shiftTapClean = false
-        if (!wasClean) return
-        if (blocksSnappingShortcut(e.target instanceof HTMLElement ? e.target : null)) {
-          return
-        }
-        if (!canCycleSnappingModeShortcut()) return
-        e.preventDefault()
-        useEditor.getState().cycleSnappingMode()
-        sfxEmitter.emit('sfx:grid-snap')
+        useSnappingHold.getState().setHeld(false)
         return
       }
       if (e.key === 'Control' || e.key === 'Meta') {
@@ -818,7 +811,6 @@ export const useKeyboard = ({
     // registry move overlay) — safe only because none of them claim Ctrl/Cmd+G.
     // `e.code` keeps it on the physical G key across keyboard layouts.
     const handleSessionGroupKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Shift') shiftTapClean = false
       if (e.key !== 'Control' && e.key !== 'Meta') ctrlTapClean = false
       if (
         e.target instanceof HTMLInputElement ||
@@ -844,10 +836,15 @@ export const useKeyboard = ({
     window.addEventListener('keydown', handleSessionGroupKeyDown, true)
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
+    // A Shift let go while the window had no focus never sends its keyup.
+    const releaseHold = () => useSnappingHold.getState().setHeld(false)
+    window.addEventListener('blur', releaseHold)
     return () => {
       window.removeEventListener('keydown', handleSessionGroupKeyDown, true)
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
+      window.removeEventListener('blur', releaseHold)
+      releaseHold()
     }
   }, [disabled, isVersionPreviewMode])
 
