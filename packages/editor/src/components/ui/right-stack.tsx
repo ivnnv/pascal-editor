@@ -96,6 +96,10 @@ export function RightStack({ inspector, helper }: { inspector: ReactNode; helper
       const cardMin = `${floors.card}px`
       if (slot.style.minHeight !== inspectorMin) slot.style.minHeight = inspectorMin
       if (card.style.minHeight !== cardMin) card.style.minHeight = cardMin
+      // AIKAZA: with no inspector open (nothing selected, a tool in hand) the
+      // card moves up to the top, where it can't collide with anything.
+      const cardTop = natural === 0 ? '0px' : ''
+      if (card.style.marginTop !== cardTop) card.style.marginTop = cardTop
       // The card is click-through; it takes the pointer only when it has to scroll.
       const pointer = floors.card < cardHeight ? 'auto' : ''
       if (card.style.pointerEvents !== pointer) card.style.pointerEvents = pointer
