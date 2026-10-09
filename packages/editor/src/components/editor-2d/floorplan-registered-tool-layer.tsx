@@ -1,6 +1,6 @@
 'use client'
 
-import { createSceneApi, nodeRegistry, useScene } from '@pascal-app/core'
+import { type AnyNodeId, createSceneApi, nodeRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense, useCallback, useMemo } from 'react'
 import { useRegisteredToolEnabled } from '../../hooks/use-registered-tool-enabled'
@@ -88,6 +88,47 @@ export function FloorplanRegisteredToolLayer() {
         sceneApi={sceneApi}
         selectNode={selectNode}
         toolDefaults={toolDefaults}
+        unit={unit}
+      />
+    </Suspense>
+  ) : null
+}
+
+/** A kind's `selectionLayer`, while one node of that kind is the whole selection. */
+export function FloorplanSelectionLayer() {
+  const mode = useEditor((state) => state.mode)
+  const idle = useInteractionScope((state) => state.scope.kind === 'idle')
+  const selectedId = useViewer((state) =>
+    state.selection.selectedIds.length === 1 ? state.selection.selectedIds[0] : null,
+  )
+  const kind = useScene((state) =>
+    selectedId ? (state.nodes[selectedId as AnyNodeId]?.type ?? null) : null,
+  )
+  const activeLevelId = useViewer((state) => state.selection.levelId)
+  const unit = useViewer((state) => state.unit)
+  const metricNotation = useViewer((state) => state.metricNotation)
+  const gridSnapStep = useEditor((state) => state.gridSnapStep)
+  const sceneApi = useMemo(() => createSceneApi(useScene), [])
+  const selectNode = useCallback(
+    (id: Parameters<FloorplanToolContext['selectNode']>[0]) =>
+      useViewer.getState().setSelection({ selectedIds: [id] }),
+    [],
+  )
+  const finishTool = useCallback(() => {}, [])
+  const Layer =
+    mode === 'select' && idle && kind
+      ? lazyTool(getFloorplanNodeExtension(nodeRegistry.get(kind))?.selectionLayer)
+      : null
+  return Layer ? (
+    <Suspense fallback={null}>
+      <Layer
+        activeLevelId={activeLevelId}
+        finishTool={finishTool}
+        gridSnapStep={gridSnapStep}
+        metricNotation={metricNotation}
+        sceneApi={sceneApi}
+        selectNode={selectNode}
+        toolDefaults={null}
         unit={unit}
       />
     </Suspense>

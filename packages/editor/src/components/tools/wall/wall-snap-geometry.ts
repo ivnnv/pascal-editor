@@ -31,6 +31,11 @@ export type WallDraftSnapResult = {
    * whether the target is allowed to transfer its construction plane.
    */
   targetWallIds: string[]
+  /**
+   * Unit direction from `start` when an angle snap (a plan axis or a joint
+   * angle) placed `point`, so later pulls can keep the wall on that line.
+   */
+  direction?: [number, number]
 }
 
 export const WALL_JOIN_SNAP_RADIUS = 0.35

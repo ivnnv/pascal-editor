@@ -21,11 +21,11 @@ import {
 import {
   CursorSphere,
   EDITOR_LAYER,
+  getActiveSnappingMode,
   getSegmentGridStep,
   isSegmentLongEnough,
   markToolCancelConsumed,
   snapBuildingLocalToWorldGrid,
-  snapScalarToGrid,
   triggerSFX,
   useEditor,
   WALL_CONNECT_SNAP_RADIUS,
@@ -38,8 +38,10 @@ import {
   buildBridgeWallPreviews,
   type GhostWallPreview,
   getLinkedWallSnapshots,
+  getWallMoveAlignTargets,
   getWallsAfterUpdates,
   type LinkedWallSnapshot,
+  snapWallMoveProjection,
   stripWallIsNewMetadata,
 } from './move-shared'
 
@@ -159,6 +161,13 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
   ])
   const moveAxisRef = useRef<WallMoveAxis | null>(
     getPerpendicularWallMoveAxis(node.start, node.end),
+  )
+  // The other walls as the move began: the drag aligns to their endpoints.
+  const alignWallsRef = useRef<WallNode[]>(
+    Object.values(useScene.getState().nodes).filter(
+      (other): other is WallNode =>
+        other.type === 'wall' && other.parentId === node.parentId && other.id !== node.id,
+    ),
   )
   const linkedOriginalsRef = useRef<LinkedWallSnapshot[]>(
     isNew
@@ -450,7 +459,15 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       if (axis) {
         const originalProj = originalCenter[0] * axis[0] + originalCenter[1] * axis[1]
         const rawProj = originalProj + rawDeltaX * axis[0] + rawDeltaZ * axis[1]
-        const snappedProj = snapScalarToGrid(rawProj, snapStep)
+        const snappedProj =
+          getActiveSnappingMode() === 'off'
+            ? rawProj
+            : snapWallMoveProjection(
+                rawProj,
+                getWallMoveAlignTargets(originalProj, axis, alignWallsRef.current),
+                snapStep,
+                getActiveSnappingMode() === 'smart',
+              )
         const perpDelta = snappedProj - originalProj
         deltaX = axis[0] * perpDelta
         deltaZ = axis[1] * perpDelta

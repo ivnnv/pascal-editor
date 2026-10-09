@@ -125,6 +125,7 @@ import { selectRoomFromHit } from '../../lib/room-selection-commands'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL, siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
+import { getPlanSnapScale } from '../../lib/snap-reach'
 import {
   cancelPendingZonePaint,
   focusedUnitNode,
@@ -167,9 +168,13 @@ import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-g
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
 import { FloorplanSiteKeyHandler } from '../editor-2d/floorplan-hotkey-handlers'
+import { FloorplanJointAngleLayer } from '../editor-2d/floorplan-joint-angle-layer'
 import { FloorplanMeasurementToolLayer } from '../editor-2d/floorplan-measurement-tool-layer'
 import { FloorplanOpenWallEndsLayer } from '../editor-2d/floorplan-open-wall-ends-layer'
-import { FloorplanRegisteredToolLayer } from '../editor-2d/floorplan-registered-tool-layer'
+import {
+  FloorplanRegisteredToolLayer,
+  FloorplanSelectionLayer,
+} from '../editor-2d/floorplan-registered-tool-layer'
 import { FloorplanRegistryActionMenu } from '../editor-2d/floorplan-registry-action-menu'
 import { FloorplanRegistryMoveOverlay } from '../editor-2d/floorplan-registry-move-overlay'
 import {
@@ -188,7 +193,7 @@ import {
   RotationAngleOverlay,
 } from '../editor-2d/renderers/floorplan-registry-layer'
 import { FloorplanVoronoiLayer } from '../editor-2d/renderers/floorplan-voronoi-layer'
-import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
+import { buildSvgPolylinePath, formatPolygonPath } from '../editor-2d/svg-paths'
 import { snapToHalf } from '../tools/item/placement-math'
 import {
   isBoxSelectPointerSuppressed,
@@ -8356,6 +8361,7 @@ export function FloorplanPanel({
           walls,
           ignoreWallIds: [dragState.wallId],
           magnetic: isMagneticSnapActive(),
+          planScale: getPlanSnapScale(),
         })
         const snappedPoint = snapResult.point
         // Magnetic beacon at the endpoint when it locked onto existing geometry.
@@ -9494,6 +9500,7 @@ export function FloorplanPanel({
         start: draftStart ?? undefined,
         angleSnap: wallAngleSnap,
         magnetic: isMagneticSnapActive(),
+        planScale: getPlanSnapScale(),
       })
       const wallSnapped = wallSnap.point
       // Locked onto existing geometry (corner / midpoint / crossing / edge) →
@@ -9898,7 +9905,12 @@ export function FloorplanPanel({
       angleSnap?: boolean
       bypassSnap?: boolean
       step?: number
-    }) => snapWallDraftPoint({ ...args, magnetic: isMagneticSnapActive() }),
+    }) =>
+      snapWallDraftPoint({
+        ...args,
+        magnetic: isMagneticSnapActive(),
+        planScale: getPlanSnapScale(),
+      }),
     [],
   )
   const { handleBackgroundPlacementClick } = useFloorplanBackgroundPlacement({
@@ -11587,8 +11599,11 @@ export function FloorplanPanel({
                 </g>
                 {activeDrawingType !== 'site-plan' && <FloorplanOpenWallEndsLayer />}
                 <FloorplanMeasurementToolLayer />
+                <FloorplanSelectionLayer />
                 <FloorplanRegisteredToolLayer />
                 {floorplanSceneSlot}
+                {/* Inside the render context, so it keeps its size at any zoom. */}
+                <FloorplanJointAngleLayer />
               </FloorplanRenderProvider>
               {/* Cursor-driven placement ghost for movingNode when the
                   active kind is registry-driven. Renders via a portal

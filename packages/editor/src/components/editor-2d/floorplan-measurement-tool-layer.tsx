@@ -7,6 +7,7 @@ import {
   collectAlignmentAnchors,
   emitter,
   type GeometryContext,
+  isCurvedWall,
   type MeasurementFeatureAnchor,
   type MeasurementSnapKind,
   measurementAngle,
@@ -17,10 +18,25 @@ import {
   measurementPrismVolume,
   nodeRegistry,
   useScene,
+  type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  buildMeasureSnapGeometry,
+  type MeasureSnapFace,
+  type MeasureSnapGeometry,
+  type MeasureSnapTarget,
+  resolveMeasureSnap,
+} from '../../lib/measure-snap'
 import { measurementPolygonLabelAnchor } from '../../lib/measurement-label'
+import {
+  type FaceLine,
+  finalizeMeasurePoint,
+  type RawMeasurePoint,
+  type ResolvedMeasurePoint,
+  squareOnFace,
+} from '../../lib/measurement-point'
 import {
   buildMeasurementAngleArcPoints,
   formatAreaLabel,
@@ -31,11 +47,11 @@ import {
   MEASUREMENT_ACTIVE_COLOR,
   metersToLinearUnit,
 } from '../../lib/measurements'
-import {
-  clearSurfacePlanSnapFeedback,
-  resolveSurfacePlanPointSnap,
-} from '../../lib/surface-plan-snap'
+import { clearSurfacePlanSnapFeedback } from '../../lib/surface-plan-snap'
 import useEditor from '../../store/use-editor'
+import useMeasureSnapSettings, {
+  MEASURE_SNAP_STRENGTH_SCALE,
+} from '../../store/use-measure-snap-settings'
 import {
   commitMeasurementDraft,
   type MeasurementAxisGuide,
@@ -43,6 +59,7 @@ import {
   measurementPolygonMidpoints,
   useMeasurementDraft,
 } from '../../store/use-measurement-draft'
+import useWallSnapIndicator from '../../store/use-wall-snap-indicator'
 import { formatAngleRadians } from '../tools/shared/segment-angle'
 import { FloorplanQuickMeasureLayer } from './floorplan-quick-measure-layer'
 import { useFloorplanRender } from './floorplan-render-context'
@@ -123,9 +140,23 @@ function associatePlanPoint(
   if (!(node && contribution)) return { point }
   const context = measurementGeometryContext(node, nodes)
   const features = contribution.features(node, context)
-  const match =
+  const firstMatch =
     contribution.match?.(node, context, point, maxDistance) ??
     closestMeasurementFeatureBinding(features, point, maxDistance)
+  // AIKAZA: on a wall only a face may pull the point; the centre line and its ends
+  // bind a point already on them, or they yank it off the corner or face it was on.
+  const isWallFace = (id: string) => id.startsWith('wall:face')
+  const match =
+    firstMatch &&
+    node.type === 'wall' &&
+    !isWallFace(firstMatch.featureId) &&
+    Math.hypot(firstMatch.point[0] - point[0], firstMatch.point[2] - point[2]) > 1e-3
+      ? closestMeasurementFeatureBinding(
+          features.filter((feature) => isWallFace(feature.id)),
+          point,
+          maxDistance,
+        )
+      : firstMatch
   if (!match) return { point }
   const reference = {
     nodeId: node.id,
@@ -405,6 +436,53 @@ export function resolveFloorplanMeasurementAxisSnap(
       ...(proximity ? { proximity: true } : {}),
     },
   }
+}
+
+// AIKAZA: how close the pointer must come to where a wall face squares up with the previous point.
+const FACE_AXIS_SNAP_DISTANCE_PX = 28
+
+let measureSnapCache: {
+  nodes: unknown
+  levelId: string | null
+  geometry: MeasureSnapGeometry
+} | null = null
+
+/** The level's wall corners and faces a measure can land on, cached until the scene changes. */
+function levelMeasureSnapGeometry(levelId: string | null): MeasureSnapGeometry {
+  const nodes = useScene.getState().nodes
+  if (measureSnapCache?.nodes === nodes && measureSnapCache.levelId === levelId)
+    return measureSnapCache.geometry
+  const walls = Object.values(nodes).filter(
+    (node): node is WallNode => node?.type === 'wall' && (!levelId || node.parentId === levelId),
+  )
+  const geometry = buildMeasureSnapGeometry(walls)
+  measureSnapCache = { nodes, levelId, geometry }
+  return geometry
+}
+
+/** Curved walls and other kinds snap through their projected plan geometry. */
+function projectedSnapOffStraightWall(nodeId: string): boolean {
+  const node = useScene.getState().nodes[nodeId as AnyNodeId]
+  return node?.type !== 'wall' || isCurvedWall(node)
+}
+
+/** The point on the nearest 45° line through `from`, closest to `point`. */
+function nearestDiagonal(from: MeasurementPoint, point: MeasurementPoint): MeasurementPoint | null {
+  const dx = point[0] - from[0]
+  const dz = point[2] - from[2]
+  if (Math.hypot(dx, dz) < 1e-6) return null
+  const along =
+    Math.sign(dx) === Math.sign(dz) ? [Math.SQRT1_2, Math.SQRT1_2] : [Math.SQRT1_2, -Math.SQRT1_2]
+  const t = dx * along[0]! + dz * along[1]!
+  return [from[0] + along[0]! * t, from[1], from[2] + along[1]! * t]
+}
+
+function faceLineOf(face: MeasureSnapFace): FaceLine | null {
+  const dx = face.b[0] - face.a[0]
+  const dz = face.b[1] - face.a[1]
+  const length = Math.hypot(dx, dz)
+  if (length < 1e-9) return null
+  return { point: face.a, direction: [dx / length, dz / length], min: 0, max: length }
 }
 
 function isMeasurementKind(
@@ -752,6 +830,17 @@ function FloorplanExtrusionControl({
   )
 }
 
+// AIKAZA: a measure's direction against the plan axes, to one decimal so a line
+// a fraction of a degree off straight shows it.
+function lineAngleText(start: readonly number[], end: readonly number[]): string {
+  const degrees = (Math.atan2(-(end[2]! - start[2]!), end[0]! - start[0]!) * 180) / Math.PI
+  // Fold into (-90°, 90°] so a line a hair off horizontal reads -0.1°, not 179.9°.
+  let folded = ((degrees % 180) + 180) % 180
+  if (folded > 90) folded -= 180
+  const rounded = Math.round(folded * 10) / 10
+  return `${rounded === 0 ? 0 : rounded}°`
+}
+
 export function FloorplanMeasurementToolLayer() {
   const groupRef = useRef<SVGGElement>(null)
   const vertexGesture = useRef<{
@@ -870,10 +959,11 @@ export function FloorplanMeasurementToolLayer() {
       return closestIndex
     }
 
-    const resolveEventPoint = (
+    let heldSnapTarget: MeasureSnapTarget | null = null
+    const resolveRawEventPoint = (
       event: MouseEvent | PointerEvent,
       anchorsOverride?: readonly MeasurementPoint[],
-    ) => {
+    ): RawMeasurePoint | null => {
       const plan = clientToPlanPoint(group, event.clientX, event.clientY)
       if (!plan) return null
       const draft = useMeasurementDraft.getState()
@@ -886,40 +976,90 @@ export function FloorplanMeasurementToolLayer() {
       const projectedPlan = projectedSnap
         ? clientToPlanPoint(group, projectedSnap.point.x, projectedSnap.point.z)
         : null
-      // Measurement anchors always bind to real geometry — the construction
-      // snapping-mode chip doesn't govern this analysis tool. Alt bypasses,
-      // including the projected registry-geometry pull.
-      const surfaceSnap = resolveSurfacePlanPointSnap({
-        rawPoint: [plan.x, plan.z],
-        fallbackPoint:
-          projectedPlan && !event.altKey ? [projectedPlan.x, projectedPlan.z] : [plan.x, plan.z],
-        levelId: activeLevelId,
-        align: false,
-        magnetic: !event.altKey,
-      })
-      // A discrete wall snap (corner / midpoint / crossing) is the strongest
-      // signal; a locked axis must not pull the point off it.
-      const discreteWallSnap =
-        surfaceSnap.wallSnap === 'endpoint' ||
-        surfaceSnap.wallSnap === 'midpoint' ||
-        surfaceSnap.wallSnap === 'intersection'
-      const raw: MeasurementPoint = [surfaceSnap.point[0], 0, surfaceSnap.point[1]]
-      const targetNodeId = surfaceSnap.wallIds[0] ?? projectedSnap?.nodeId ?? null
+      // AIKAZA: measures snap to what a person sees on the plan: wall outline corners
+      // and faces, caught and released in screen pixels. Alt places the point freely.
+      const groupMatrix = group.getScreenCTM()
+      const pixelsPerMetre = groupMatrix ? Math.hypot(groupMatrix.a, groupMatrix.b) : 100
+      const settings = useMeasureSnapSettings.getState()
+      const reachScale = MEASURE_SNAP_STRENGTH_SCALE[settings.strength]
+      const target = event.altKey
+        ? null
+        : resolveMeasureSnap(
+            levelMeasureSnapGeometry(activeLevelId),
+            [plan.x, plan.z],
+            pixelsPerMetre,
+            heldSnapTarget,
+            { corners: settings.corners, faces: settings.faces, reachScale },
+          )
+      heldSnapTarget = target
+      // Off the walls, other kinds still pull through their projected plan geometry.
+      const offWallSnap =
+        !target &&
+        !event.altKey &&
+        projectedPlan &&
+        projectedSnap &&
+        projectedSnapOffStraightWall(projectedSnap.nodeId)
+          ? projectedPlan
+          : null
+      const snapped: [number, number] = target
+        ? target.point
+        : offWallSnap
+          ? [offWallSnap.x, offWallSnap.z]
+          : [plan.x, plan.z]
+      const raw: MeasurementPoint = [snapped[0], 0, snapped[1]]
+      // A corner is the strongest signal; an axis lock must not pull the point off it.
+      const discreteWallSnap = target?.kind === 'corner'
+      const markerKind = target ? (target.kind === 'corner' ? 'endpoint' : 'wall') : null
+      const markerWallId = target?.wallId
+      const targetNodeId = target?.wallId ?? (offWallSnap ? projectedSnap!.nodeId : null)
       const lastPoint = draft.points.at(-1)
+      // On a wall face, square up with the previous point where the face crosses its axes.
+      const faceLine = target?.kind === 'face' ? faceLineOf(target.face) : null
+      if (faceLine && lastPoint && settings.squareUp && !event.altKey && !anchorsOverride) {
+        const squared = squareOnFace(faceLine, lastPoint, settings.diagonals).filter(
+          (candidate) =>
+            screenDistanceToPlanPoint(group, candidate.point, event.clientX, event.clientY) <=
+            FACE_AXIS_SNAP_DISTANCE_PX * reachScale,
+        )
+        const best = squared.sort(
+          (a, b) =>
+            screenDistanceToPlanPoint(group, a.point, event.clientX, event.clientY) -
+            screenDistanceToPlanPoint(group, b.point, event.clientX, event.clientY),
+        )[0]
+        if (best) {
+          return {
+            markerKind: 'wall',
+            ...(targetNodeId ? { markerWallId: targetNodeId } : {}),
+            point: best.point,
+            // A 45° crossing has no axis guide to draw.
+            guide:
+              best.axis === 'diagonal'
+                ? null
+                : ({
+                    axis: best.axis,
+                    from: [...lastPoint] as MeasurementPoint,
+                    to: best.point,
+                    snapped: true,
+                  } satisfies MeasurementAxisGuide),
+            targetNodeId,
+          }
+        }
+      }
       const resolved = snapPlanPoint(
         group,
         raw,
         anchorsOverride ?? (lastPoint ? [lastPoint] : []),
         event.clientX,
         event.clientY,
-        !discreteWallSnap && !event.altKey,
-        !event.altKey &&
+        settings.align && !discreteWallSnap && !event.altKey,
+        settings.align &&
+          !event.altKey &&
           !discreteWallSnap &&
           draft.axisGuide?.snapped &&
           draft.axisGuide.axis !== 'y'
           ? draft.axisGuide
           : null,
-        projectedGeometry.proximityAnchors,
+        [], // AIKAZA: align only with the measure's own points, not other walls' corners
       )
       if (targetNodeId && resolved.guide?.snapped) {
         const candidate = planPointToClient(group, resolved.point)
@@ -940,12 +1080,49 @@ export function FloorplanMeasurementToolLayer() {
             event.clientY,
             false,
             null,
-            projectedGeometry.proximityAnchors,
+            [], // AIKAZA: align only with the measure's own points, not other walls' corners
           )
-          return { ...surfaceOnly, targetNodeId }
+          return { ...surfaceOnly, targetNodeId, markerKind, markerWallId }
         }
       }
-      return { ...resolved, targetNodeId }
+      if (settings.diagonals && lastPoint && !target && !resolved.guide?.snapped && !event.altKey) {
+        const diagonal = nearestDiagonal(lastPoint, raw)
+        if (
+          diagonal &&
+          screenDistanceToPlanPoint(group, diagonal, event.clientX, event.clientY) <=
+            FACE_AXIS_SNAP_DISTANCE_PX * reachScale
+        )
+          return { point: diagonal, guide: null, targetNodeId, markerKind, markerWallId }
+      }
+      return {
+        ...resolved,
+        targetNodeId,
+        markerKind,
+        markerWallId,
+        exact: discreteWallSnap && !resolved.guide?.snapped,
+      }
+    }
+
+    // AIKAZA: resolve once; the marker, preview and commit all take this point.
+    const resolveEventPoint = (
+      event: MouseEvent | PointerEvent,
+      anchorsOverride?: readonly MeasurementPoint[],
+    ): ResolvedMeasurePoint | null => {
+      const raw = resolveRawEventPoint(event, anchorsOverride)
+      if (!raw) {
+        useWallSnapIndicator.getState().set(null)
+        return null
+      }
+      const resolved = finalizeMeasurePoint(raw, (point, targetNodeId, maxDistance) =>
+        associatePlanPoint(
+          point,
+          targetNodeId,
+          maxDistance ??
+            (event.altKey ? SEMANTIC_FEATURE_BYPASS_DISTANCE : SEMANTIC_FEATURE_SNAP_DISTANCE),
+        ),
+      )
+      useWallSnapIndicator.getState().set(resolved.marker)
+      return resolved
     }
 
     const clearVertexGesture = (finish: boolean) => {
@@ -1033,11 +1210,7 @@ export function FloorplanMeasurementToolLayer() {
         )
         const resolved = resolveEventPoint(event, anchors)
         if (resolved) {
-          const associated = associatePlanPoint(
-            resolved.point,
-            resolved.targetNodeId,
-            event.altKey ? SEMANTIC_FEATURE_BYPASS_DISTANCE : SEMANTIC_FEATURE_SNAP_DISTANCE,
-          )
+          const associated = resolved
           activeDraft.updateDraggedVertex(
             '2d',
             {
@@ -1056,12 +1229,6 @@ export function FloorplanMeasurementToolLayer() {
       if (draft.stage !== 'collecting') return
       const resolved = resolveEventPoint(event)
       const associated = resolved
-        ? associatePlanPoint(
-            resolved.point,
-            resolved.targetNodeId,
-            event.altKey ? SEMANTIC_FEATURE_BYPASS_DISTANCE : SEMANTIC_FEATURE_SNAP_DISTANCE,
-          )
-        : null
       draft.setHover(
         '2d',
         resolved && associated
@@ -1077,9 +1244,12 @@ export function FloorplanMeasurementToolLayer() {
       )
     }
 
-    const onPointerLeave = () => {
+    const onPointerLeave = (event: PointerEvent) => {
+      // AIKAZA: the capture listener also hears every child element's leave; only leaving the plan clears.
+      if (event.target !== svg) return
       if (vertexGesture.current) return
       clearSurfacePlanSnapFeedback()
+      heldSnapTarget = null
       const draft = useMeasurementDraft.getState()
       if (!draft.owner || draft.owner === '2d') draft.setHover('2d', null)
     }
@@ -1110,6 +1280,7 @@ export function FloorplanMeasurementToolLayer() {
       consume(event)
       clearVertexGesture(false)
       clearSurfacePlanSnapFeedback()
+      heldSnapTarget = null
     }
 
     const onClick = (event: MouseEvent) => {
@@ -1132,11 +1303,7 @@ export function FloorplanMeasurementToolLayer() {
       }
       const resolved = resolveEventPoint(event)
       if (!resolved) return
-      const associated = associatePlanPoint(
-        resolved.point,
-        resolved.targetNodeId,
-        event.altKey ? SEMANTIC_FEATURE_BYPASS_DISTANCE : SEMANTIC_FEATURE_SNAP_DISTANCE,
-      )
+      const associated = resolved
       if (!draft.addPoint('2d', associated.point, associated.anchor)) return
       if (useMeasurementDraft.getState().stage === 'ready') commitMeasurementDraft('2d')
     }
@@ -1157,10 +1324,12 @@ export function FloorplanMeasurementToolLayer() {
     const onBlur = () => {
       clearVertexGesture(false)
       clearSurfacePlanSnapFeedback()
+      heldSnapTarget = null
     }
     const onToolCancel = () => {
       clearVertexGesture(false)
       clearSurfacePlanSnapFeedback()
+      heldSnapTarget = null
     }
 
     emitter.on('tool:cancel', onToolCancel)
@@ -1176,6 +1345,7 @@ export function FloorplanMeasurementToolLayer() {
       cancelVertexGesture.current = () => {}
       clearVertexGesture(false)
       clearSurfacePlanSnapFeedback()
+      heldSnapTarget = null
       emitter.off('tool:cancel', onToolCancel)
       svg.removeEventListener('pointerdown', onPointerDown, true)
       svg.removeEventListener('pointermove', onPointerMove, true)
@@ -1225,7 +1395,7 @@ export function FloorplanMeasurementToolLayer() {
         angle: Math.atan2(end[2] - start[2], end[0] - start[0]),
         point: [(start[0] + end[0]) / 2, 0, (start[2] + end[2]) / 2],
         screenUpright: false,
-        text: formatLinearMeasurement(measurementDistance(start, end), unit, metricNotation),
+        text: `${formatLinearMeasurement(measurementDistance(start, end), unit, metricNotation)} · ${lineAngleText(start, end)}`,
       }
     } else if (kind === 'angle' && livePoints.length >= 3) {
       const anglePoints = livePoints.slice(0, 3) as [

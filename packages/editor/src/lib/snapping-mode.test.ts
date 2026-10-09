@@ -40,6 +40,10 @@ describe('resolveSnapFlags', () => {
     expect(resolveSnapFlags('lines')).not.toEqual(resolveSnapFlags('angles'))
   })
 
+  it("'smart' combines grid, alignment lines and the angle lock", () => {
+    expect(resolveSnapFlags('smart')).toEqual({ grid: true, magnetic: true, angles: true })
+  })
+
   it('cycles through every mode and wraps', () => {
     const seen = [DEFAULT_SNAPPING_MODE]
     let mode = DEFAULT_SNAPPING_MODE
@@ -83,7 +87,7 @@ describe('per-context snapping', () => {
     expect(snappingModesFor('wall')).toContain('angles')
     // Angle lock is wall/fence-only — slabs, curves and translates never get it.
     expect(snappingModesFor('polygon')).not.toContain('angles')
-    expect(snappingModesFor('polygon')).toEqual(['grid', 'lines', 'off'])
+    expect(snappingModesFor('polygon')).toEqual(['grid', 'smart', 'lines', 'off'])
   })
 
   it('cycles within the context set and clamps a foreign value', () => {
