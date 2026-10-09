@@ -1,11 +1,28 @@
 import { Icon } from '@iconify/react'
+import { useSnappingHold } from '../../../lib/snapping-hold'
 import type { ToolHint } from '@pascal-app/core'
-import { Fragment, useEffect, useSyncExternalStore } from 'react'
+import {
+  Fragment,
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
+import { createPortal } from 'react-dom'
 import {
   CONTINUATION_PROFILES,
   type ContinuationContext,
 } from '../../../lib/continuation'
 import type { ContextualShortcutHint } from '../../../lib/contextual-help'
+import {
+  clamp,
+  DRAG_MARGIN,
+  getDragBounds,
+  type PanelDrag,
+  usePanelDrag,
+} from '../../../hooks/use-panel-drag'
 import type { HudTitle } from '../../../lib/hud-title'
 import { hasActivePaintMaterial } from '../../../lib/material-paint'
 import { usePaintRegionMode } from '../../../lib/paint-region-mode'
@@ -15,12 +32,15 @@ import {
   cycleSnappingModeIn,
   resolveSnapFlags,
   type SnapContext,
+  type SnappingMode,
 } from '../../../lib/snapping-mode'
 import { cn } from '../../../lib/utils'
 import useEditor, { type GridSnapStep } from '../../../store/use-editor'
 import useFenceCurveDraft from '../../../store/use-fence-curve-draft'
 import useMeasureSnapSettings from '../../../store/use-measure-snap-settings'
+import useHudPreferences, { type HudPosition } from '../../../store/use-hud-preferences'
 import { IconRefGlyph } from '../icon-ref'
+import { Checkbox } from '../primitives/checkbox'
 import { ShortcutToken } from '../primitives/shortcut-token'
 import { Switch } from '../primitives/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
@@ -35,7 +55,7 @@ import { useInRightStack } from '../right-stack'
 // tracks, so labels align even when keys differ in width (⌘ vs Shift) or wrap to
 // two lines. Near-opaque bg + single backdrop blur keeps active rows readable.
 const CARD_CLASS =
-  'pointer-events-none grid w-[252px] grid-cols-[max-content_1fr] gap-x-2.5 gap-y-1.5 rounded-xl border border-border bg-background/95 p-3 shadow-lg backdrop-blur-md'
+  'pointer-events-none grid grid-cols-[max-content_1fr] gap-x-2.5 gap-y-1.5 rounded-xl border border-border bg-background/95 p-3 shadow-lg backdrop-blur-md'
 // On its own (no shared right column) it floats centred on the right edge.
 const FLOATING_CLASS = 'fixed top-1/2 right-4 z-40 -translate-y-1/2'
 
@@ -177,15 +197,45 @@ const SNAPPING_MODE_LABELS = {
 
 const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
 
+const snappingLabel = (mode: SnappingMode, held: boolean) =>
+  held ? 'Snapping: Off (holding Shift)' : `Snapping: ${SNAPPING_MODE_LABELS[mode]}`
+
 function nextGridSnapStep(step: GridSnapStep): GridSnapStep {
   const index = GRID_SNAP_STEPS.indexOf(step)
   return GRID_SNAP_STEPS[(index + 1) % GRID_SNAP_STEPS.length] ?? GRID_SNAP_STEPS[0]!
+}
+
+/**
+ * The snapping mode on its own, at the bottom of the viewer, while the hints
+ * panel that normally shows it is closed or folded: the mode decides where
+ * things land, so it should never be invisible.
+ */
+function SnappingPill({ context }: { context: SnapContext }) {
+  const snappingMode = useEditor((s) => s.snappingModeByContext[context])
+  const setSnappingMode = useEditor((s) => s.setSnappingMode)
+  const held = useSnappingHold((s) => s.held)
+  return (
+    <button
+      aria-label={snappingLabel(snappingMode, held)}
+      className="pointer-events-auto fixed bottom-24 left-1/2 z-40 flex -translate-x-1/2 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-background/95 px-3 py-1 text-muted-foreground text-xs shadow-lg backdrop-blur-md hover:text-foreground"
+      onClick={() => {
+        setSnappingMode(context, cycleSnappingModeIn(context, snappingMode))
+        sfxEmitter.emit('sfx:grid-snap')
+      }}
+      title="Snapping mode — click to cycle, hold Shift to place freely"
+      type="button"
+    >
+      <Icon height={13} icon={SNAPPING_MODE_ICONS[held ? 'off' : snappingMode]} width={13} />
+      {snappingLabel(snappingMode, held)}
+    </button>
+  )
 }
 
 // The active interaction's snapping controls, scoped to its context (wall / item
 // / polygon) so each action shows only the modes that make sense for it.
 function SnappingChips({ context }: { context: SnapContext }) {
   const snappingMode = useEditor((s) => s.snappingModeByContext[context])
+  const held = useSnappingHold((s) => s.held)
   const setSnappingMode = useEditor((s) => s.setSnappingMode)
   const gridSnapStep = useEditor((s) => s.gridSnapStep)
   const setGridSnapStep = useEditor((s) => s.setGridSnapStep)
@@ -195,16 +245,16 @@ function SnappingChips({ context }: { context: SnapContext }) {
   return (
     <>
       <ChipRow
-        ariaLabel={`Snapping: ${SNAPPING_MODE_LABELS[snappingMode]}`}
+        ariaLabel={snappingLabel(snappingMode, held)}
         guideTarget="snap-mode"
-        icon={SNAPPING_MODE_ICONS[snappingMode]}
-        label={`Snapping: ${SNAPPING_MODE_LABELS[snappingMode]}`}
+        icon={SNAPPING_MODE_ICONS[held ? 'off' : snappingMode]}
+        label={snappingLabel(snappingMode, held)}
         onClick={() => {
           setSnappingMode(context, cycleSnappingModeIn(context, snappingMode))
           sfxEmitter.emit('sfx:grid-snap')
         }}
         shortcut="Shift"
-        tooltip="Snapping mode — click or press Shift to cycle"
+        tooltip="Snapping mode — click to cycle, hold Shift to place freely"
       />
       {gridActive ? (
         <ChipRow
@@ -465,10 +515,24 @@ function PaintScopeChip() {
 }
 
 // The tool in hand: its icon, name and arming key, over a hairline.
-function HudHeader({ title }: { title: HudTitle }) {
+function HudHeader({
+  title,
+  collapsed,
+  onClose,
+  onPointerDown,
+}: {
+  title: HudTitle
+  collapsed: boolean
+  onClose: () => void
+  onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void
+}) {
   return (
     <div
-      className="col-span-2 mb-0.5 flex items-center gap-2.5 border-border border-b pb-2.5"
+      className={cn(
+        'pointer-events-auto relative col-span-2 flex cursor-grab touch-none select-none items-center gap-2.5 active:cursor-grabbing',
+        !collapsed && 'mb-0.5 border-border border-b pb-2.5',
+      )}
+      onPointerDown={onPointerDown}
       data-hud-title={title.label}
     >
       {title.icon ? (
@@ -480,8 +544,116 @@ function HudHeader({ title }: { title: HudTitle }) {
         {title.label}
       </span>
       {title.shortcut ? <ShortcutToken className={TOKEN_CLASS} value={title.shortcut} /> : null}
+      <Icon
+        className="-translate-x-1/2 pointer-events-none absolute left-1/2 text-muted-foreground/40"
+        height={16}
+        icon="lucide:grip-horizontal"
+        width={16}
+      />
+      <HudButtons collapsed={collapsed} onClose={onClose} />
     </div>
   )
+}
+
+const HUD_BUTTON_CLASS =
+  'flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground'
+
+function HudButtons({
+  collapsed,
+  onClose,
+  className,
+}: {
+  collapsed: boolean
+  onClose: () => void
+  className?: string
+}) {
+  return (
+    <div className={cn('pointer-events-auto -mr-1 flex shrink-0 items-center gap-1', className)}>
+      <button
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? 'Expand shortcut hints' : 'Collapse shortcut hints'}
+        className={HUD_BUTTON_CLASS}
+        onClick={() => useHudPreferences.getState().setCollapsed(!collapsed)}
+        type="button"
+      >
+        <Icon
+          className={cn('transition-transform', !collapsed && 'rotate-180')}
+          height={14}
+          icon="lucide:chevron-down"
+          width={14}
+        />
+      </button>
+      <button
+        aria-label="Close shortcut hints"
+        className={HUD_BUTTON_CLASS}
+        onClick={onClose}
+        type="button"
+      >
+        <Icon height={14} icon="lucide:x" width={14} />
+      </button>
+    </div>
+  )
+}
+
+const UNTITLED_HUD: HudTitle = { label: 'Shortcuts' }
+
+// Drag the card by its header, with the inspector's drag. Once moved it floats
+// on its own over the viewer, out of the right column that would clip it.
+function useHudDrag(
+  card: React.RefObject<HTMLDivElement | null>,
+  // The mounted card, as state: hiding and showing it again swaps the element.
+  cardEl: HTMLDivElement | null,
+  collapsed: boolean,
+) {
+  const saved = useHudPreferences((state) => state.position)
+  // The saved spot pulled back inside the viewer when the window or the card
+  // no longer fit it. Shown only: the saved spot stays as the user left it.
+  const [fitted, setFitted] = useState<HudPosition | null>(null)
+  const { drag, onPointerDown } = usePanelDrag(card, {
+    onClick: () => useHudPreferences.getState().setCollapsed(!collapsed),
+    onEnd: (end) => useHudPreferences.getState().setPosition(dragged(end)),
+  })
+  const position = drag ? dragged(drag) : (fitted ?? saved)
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-fit when the card changes size
+  useLayoutEffect(() => {
+    const el = cardEl
+    if (!el || !saved) {
+      setFitted(null)
+      return
+    }
+    const fit = () => {
+      const { width, height } = el.getBoundingClientRect()
+      const next = clampToViewer(saved.left, saved.top, width, height)
+      const moved = Math.abs(next.left - saved.left) > 0.5 || Math.abs(next.top - saved.top) > 0.5
+      setFitted(moved ? { ...next, width: saved.width } : null)
+    }
+    fit()
+    // Rows come and go with the selection or gesture, as well as on collapse.
+    const resize = new ResizeObserver(fit)
+    resize.observe(el)
+    window.addEventListener('resize', fit)
+    return () => {
+      resize.disconnect()
+      window.removeEventListener('resize', fit)
+    }
+  }, [cardEl, collapsed, saved])
+
+  return { position, onPointerDown }
+}
+
+const dragged = ({ rect, dx, dy }: PanelDrag): HudPosition => ({
+  left: rect.left + dx,
+  top: rect.top + dy,
+  width: rect.width,
+})
+
+function clampToViewer(left: number, top: number, width: number, height: number) {
+  const bounds = getDragBounds(null)
+  return {
+    left: clamp(left, bounds.left + DRAG_MARGIN, bounds.right - width - DRAG_MARGIN),
+    top: clamp(top, bounds.top + DRAG_MARGIN, bounds.bottom - height - DRAG_MARGIN),
+  }
 }
 
 const isEscHint = (hint: ContextualShortcutHint) =>
@@ -534,6 +706,13 @@ export function ContextualHelperPanel({
   notice?: string | null
 }) {
   const inStack = useInRightStack()
+  const showHints = useHudPreferences((state) => state.showHints)
+  const closedFor = useHudPreferences((state) => state.closedFor)
+  const collapsed = useHudPreferences((state) => state.collapsed)
+  const [dontShowAgain, setDontShowAgain] = useState(false)
+  const cardRef = useRef<HTMLDivElement | null>(null)
+  const [cardEl, setCardEl] = useState<HTMLDivElement | null>(null)
+  const { position, onPointerDown } = useHudDrag(cardRef, cardEl, collapsed)
   const modeChips = chipHints.filter((hint) => hint.chip)
   const measuring = useEditor(
     (state) =>
@@ -547,27 +726,74 @@ export function ContextualHelperPanel({
   const snapContext = measuring ? null : snapContextProp
   const hasChips =
     !!snapContext || !!continuationContext || modeChips.length > 0 || showPaintScope || measuring
+  const panelKey = title?.label ?? hints.map(hintKey).join('|')
+  // A plain close lasts while this tool or gesture is in hand.
+  useEffect(() => {
+    if (closedFor && closedFor !== panelKey) useHudPreferences.getState().closeFor(null)
+  }, [closedFor, panelKey])
   const fenceFeature = useEditor((state) =>
     state.mode === 'build' && state.tool === 'fence' ? state.toolDefaults.fence?.featurePlacement : null,
   )
-  if (fenceFeature === 'gate' || fenceFeature === 'opening') return (
-    <div className={cn(CARD_CLASS, !inStack && FLOATING_CLASS)} data-hud-card>
-      {title ? <HudHeader title={title} /> : null}
-      <ChipRow shortcut="Left click" label={fenceFeature === 'gate' ? 'Place gate on a fence' : 'Place passage on a fence'} />
-      <ChipRow shortcut="Esc" label="Cancel placement" />
-    </div>
-  )
+  const close = () => {
+    if (dontShowAgain) useHudPreferences.getState().setShowHints(false)
+    else useHudPreferences.getState().closeFor(panelKey)
+  }
+  if (fenceFeature === 'gate' || fenceFeature === 'opening') {
+    if (!showHints || closedFor === panelKey) return null
+    return (
+      <div className={cn(CARD_CLASS, !inStack && FLOATING_CLASS)} data-hud-card>
+        <HudHeader
+          collapsed={false}
+          onClose={close}
+          onPointerDown={() => {}}
+          title={title ?? UNTITLED_HUD}
+        />
+        <ChipRow
+          label={fenceFeature === 'gate' ? 'Place gate on a fence' : 'Place passage on a fence'}
+          shortcut="Left click"
+        />
+        <ChipRow label="Cancel placement" shortcut="Esc" />
+      </div>
+    )
+  }
   if (hints.length === 0 && !hasChips && !notice) return null
+  const pill = snapContext ? <SnappingPill context={snapContext} /> : null
+  if (!showHints || closedFor === panelKey) return pill
+
 
   const actionHints = hints.filter((hint) => !isEscHint(hint))
   const escHints = hints.filter(isEscHint)
 
-  return (
+  const card = (
     <div
-      className={cn(CARD_CLASS, !inStack && FLOATING_CLASS)}
+      className={cn(
+        CARD_CLASS,
+        // In the right column it matches the inspector above it.
+        !position && (inStack ? 'w-(--right-stack-inspector-width,252px)' : 'w-[252px]'),
+        position ? 'fixed top-0 left-0 z-40 will-change-transform' : !inStack && FLOATING_CLASS,
+      )}
       data-hud-card
+      ref={(el) => {
+        cardRef.current = el
+        setCardEl(el)
+      }}
+      style={
+        position
+          ? {
+              transform: `translate3d(${position.left}px, ${position.top}px, 0)`,
+              width: position.width,
+            }
+          : undefined
+      }
     >
-      {title ? <HudHeader title={title} /> : null}
+      <HudHeader
+        collapsed={collapsed}
+        onPointerDown={onPointerDown}
+        onClose={close}
+        title={title ?? UNTITLED_HUD}
+      />
+      {collapsed ? null : (
+        <>
       {actionHints.map((hint) => (
         <HintRow hint={hint} key={hintKey(hint)} />
       ))}
@@ -592,6 +818,21 @@ export function ContextualHelperPanel({
       {escHints.map((hint) => (
         <HintRow hint={hint} key={hintKey(hint)} />
       ))}
+      <label className="pointer-events-auto col-span-2 mt-0.5 flex cursor-pointer items-center gap-1.5 text-[10px] text-muted-foreground">
+        <Checkbox checked={dontShowAgain} onCheckedChange={setDontShowAgain} />
+        Don't show again when closed
+      </label>
+        </>
+      )}
     </div>
+  )
+  const placed = position ? createPortal(card, document.body) : card
+  return collapsed && pill ? (
+    <>
+      {placed}
+      {pill}
+    </>
+  ) : (
+    placed
   )
 }
