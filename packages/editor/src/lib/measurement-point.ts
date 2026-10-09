@@ -22,6 +22,8 @@ export type RawMeasurePoint = {
   targetNodeId: string | null
   markerKind: WallSnapKind | null
   markerWallId?: string
+  // A snap the binding must not move, like a visible corner.
+  exact?: boolean
 }
 
 export type ResolvedMeasurePoint = MeasureBinding & {
@@ -35,8 +37,8 @@ const BOUND_EPSILON = 1e-4
 
 /**
  * Binds the snapped point to a feature and places the marker on the result. A
- * binding may pull a free point onto its feature, but never off an axis lock;
- * there it only describes a feature the point already lies on.
+ * binding may pull a free point onto its feature, but never off an axis lock or
+ * an exact snap; there it only describes a feature the point already lies on.
  */
 export function finalizeMeasurePoint(
   raw: RawMeasurePoint,
@@ -47,7 +49,7 @@ export function finalizeMeasurePoint(
   ) => MeasureBinding,
 ): ResolvedMeasurePoint {
   let binding = bind(raw.point, raw.targetNodeId)
-  if (raw.guide?.snapped && distance(binding.point, raw.point) > BOUND_EPSILON) {
+  if ((raw.guide?.snapped || raw.exact) && distance(binding.point, raw.point) > BOUND_EPSILON) {
     binding = bind(raw.point, raw.targetNodeId, BOUND_EPSILON)
     if (distance(binding.point, raw.point) > BOUND_EPSILON) binding = { point: raw.point }
   }

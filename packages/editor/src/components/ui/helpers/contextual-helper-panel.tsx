@@ -539,7 +539,9 @@ export function ContextualHelperPanel({
     (state) =>
       state.mode === 'build' &&
       state.tool === 'measurement' &&
-      state.toolDefaults.measurement?.kind !== 'smart',
+      state.toolDefaults.measurement?.kind !== 'smart' &&
+      // The options steer the floor plan's measure tool, not the 3D one.
+      state.viewMode !== '3d',
   )
   // The measure tool snaps by its own chips; the drawing snap mode doesn't apply to it.
   const snapContext = measuring ? null : snapContextProp

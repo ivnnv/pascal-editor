@@ -71,3 +71,20 @@ describe('squaring up on a face', () => {
     expect(squareOnFace(face, [1.253, 0, -4.2])).toEqual([])
   })
 })
+
+describe('exact snaps', () => {
+  test('a binding never drags a corner snap to a nearby feature end', () => {
+    const resolved = finalizeMeasurePoint(
+      {
+        point: [1.3, 0, -2],
+        guide: null,
+        targetNodeId: 'wall_a',
+        markerKind: 'endpoint',
+        exact: true,
+      },
+      faceBinding,
+    )
+    expect(resolved.point).toEqual([1.3, 0, -2])
+    expect(resolved.marker).toMatchObject({ x: 1.3, z: -2, kind: 'endpoint' })
+  })
+})

@@ -7,6 +7,7 @@ import {
   collectAlignmentAnchors,
   emitter,
   type GeometryContext,
+  isCurvedWall,
   type MeasurementFeatureAnchor,
   type MeasurementSnapKind,
   measurementAngle,
@@ -457,6 +458,12 @@ function levelMeasureSnapGeometry(levelId: string | null): MeasureSnapGeometry {
   const geometry = buildMeasureSnapGeometry(walls)
   measureSnapCache = { nodes, levelId, geometry }
   return geometry
+}
+
+/** Curved walls and other kinds snap through their projected plan geometry. */
+function projectedSnapOffStraightWall(nodeId: string): boolean {
+  const node = useScene.getState().nodes[nodeId as AnyNodeId]
+  return node?.type !== 'wall' || isCurvedWall(node)
 }
 
 /** The point on the nearest 45° line through `from`, closest to `point`. */
@@ -991,7 +998,7 @@ export function FloorplanMeasurementToolLayer() {
         !event.altKey &&
         projectedPlan &&
         projectedSnap &&
-        useScene.getState().nodes[projectedSnap.nodeId as AnyNodeId]?.type !== 'wall'
+        projectedSnapOffStraightWall(projectedSnap.nodeId)
           ? projectedPlan
           : null
       const snapped: [number, number] = target
@@ -1087,7 +1094,13 @@ export function FloorplanMeasurementToolLayer() {
         )
           return { point: diagonal, guide: null, targetNodeId, markerKind, markerWallId }
       }
-      return { ...resolved, targetNodeId, markerKind, markerWallId }
+      return {
+        ...resolved,
+        targetNodeId,
+        markerKind,
+        markerWallId,
+        exact: discreteWallSnap && !resolved.guide?.snapped,
+      }
     }
 
     // AIKAZA: resolve once; the marker, preview and commit all take this point.
