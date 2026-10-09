@@ -19,6 +19,7 @@ import {
 import { cn } from '../../../lib/utils'
 import useEditor, { type GridSnapStep } from '../../../store/use-editor'
 import useFenceCurveDraft from '../../../store/use-fence-curve-draft'
+import useMeasureSnapSettings from '../../../store/use-measure-snap-settings'
 import { IconRefGlyph } from '../icon-ref'
 import { ShortcutToken } from '../primitives/shortcut-token'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
@@ -217,6 +218,40 @@ function SnappingChips({ context }: { context: SnapContext }) {
           tooltip="Grid step — click or tap Ctrl to cycle"
         />
       ) : null}
+    </>
+  )
+}
+
+// AIKAZA: what the measure tool snaps to, switched live while measuring.
+const MEASURE_SNAP_TOGGLES = [
+  { key: 'corners', label: 'Corners', tooltip: 'Snap to wall corners' },
+  { key: 'faces', label: 'Wall faces', tooltip: 'Snap to wall faces' },
+  { key: 'squareUp', label: 'Square up', tooltip: 'Land level or plumb with the previous point' },
+  { key: 'diagonals', label: '45°', tooltip: 'Also offer 45° lines from the previous point' },
+  { key: 'align', label: 'Align', tooltip: 'Line up with the measure’s own points' },
+] as const
+
+const STRENGTH_LABELS = { gentle: 'Gentle', normal: 'Normal', strong: 'Strong' } as const
+
+function MeasureSnapChips() {
+  const settings = useMeasureSnapSettings()
+  return (
+    <>
+      {MEASURE_SNAP_TOGGLES.map(({ key, label, tooltip }) => (
+        <ChipRow
+          ariaLabel={`${label}: ${settings[key] ? 'on' : 'off'}`}
+          key={key}
+          label={`${label}: ${settings[key] ? 'On' : 'Off'}`}
+          onClick={() => settings.toggle(key)}
+          tooltip={tooltip}
+        />
+      ))}
+      <ChipRow
+        ariaLabel={`Snap strength: ${STRENGTH_LABELS[settings.strength]}`}
+        label={`Strength: ${STRENGTH_LABELS[settings.strength]}`}
+        onClick={settings.cycleStrength}
+        tooltip="How far snaps reach — click to cycle"
+      />
     </>
   )
 }
@@ -449,7 +484,7 @@ const hintKey = (hint: ContextualShortcutHint) => `${hint.keys.join('+')}:${hint
 export function ContextualHelperPanel({
   hints,
   chipHints = [],
-  snapContext = null,
+  snapContext: snapContextProp = null,
   showPaintScope = false,
   continuationContext = null,
   title = null,
@@ -471,7 +506,16 @@ export function ContextualHelperPanel({
 }) {
   const inStack = useInRightStack()
   const modeChips = chipHints.filter((hint) => hint.chip)
-  const hasChips = !!snapContext || !!continuationContext || modeChips.length > 0 || showPaintScope
+  const measuring = useEditor(
+    (state) =>
+      state.mode === 'build' &&
+      state.tool === 'measurement' &&
+      state.toolDefaults.measurement?.kind !== 'smart',
+  )
+  // The measure tool snaps by its own chips; the drawing snap mode doesn't apply to it.
+  const snapContext = measuring ? null : snapContextProp
+  const hasChips =
+    !!snapContext || !!continuationContext || modeChips.length > 0 || showPaintScope || measuring
   const fenceFeature = useEditor((state) =>
     state.mode === 'build' && state.tool === 'fence' ? state.toolDefaults.fence?.featurePlacement : null,
   )
@@ -501,6 +545,7 @@ export function ContextualHelperPanel({
         <div className="col-span-2 my-0.5 h-px bg-border" />
       ) : null}
       {snapContext ? <SnappingChips context={snapContext} /> : null}
+      {measuring ? <MeasureSnapChips /> : null}
       {continuationContext === 'fence' ? <FenceContinuationChips /> : null}
       {continuationContext && continuationContext !== 'fence' ? (
         <ContinuationChip context={continuationContext} />

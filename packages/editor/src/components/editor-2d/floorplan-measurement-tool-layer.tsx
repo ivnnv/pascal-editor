@@ -48,6 +48,9 @@ import {
 } from '../../lib/measurements'
 import { clearSurfacePlanSnapFeedback } from '../../lib/surface-plan-snap'
 import useEditor from '../../store/use-editor'
+import useMeasureSnapSettings, {
+  MEASURE_SNAP_STRENGTH_SCALE,
+} from '../../store/use-measure-snap-settings'
 import {
   commitMeasurementDraft,
   type MeasurementAxisGuide,
@@ -454,6 +457,17 @@ function levelMeasureSnapGeometry(levelId: string | null): MeasureSnapGeometry {
   const geometry = buildMeasureSnapGeometry(walls)
   measureSnapCache = { nodes, levelId, geometry }
   return geometry
+}
+
+/** The point on the nearest 45° line through `from`, closest to `point`. */
+function nearestDiagonal(from: MeasurementPoint, point: MeasurementPoint): MeasurementPoint | null {
+  const dx = point[0] - from[0]
+  const dz = point[2] - from[2]
+  if (Math.hypot(dx, dz) < 1e-6) return null
+  const along =
+    Math.sign(dx) === Math.sign(dz) ? [Math.SQRT1_2, Math.SQRT1_2] : [Math.SQRT1_2, -Math.SQRT1_2]
+  const t = dx * along[0]! + dz * along[1]!
+  return [from[0] + along[0]! * t, from[1], from[2] + along[1]! * t]
 }
 
 function faceLineOf(face: MeasureSnapFace): FaceLine | null {
@@ -972,6 +986,8 @@ export function FloorplanMeasurementToolLayer() {
       // and faces, caught and released in screen pixels. Alt places the point freely.
       const groupMatrix = group.getScreenCTM()
       const pixelsPerMetre = groupMatrix ? Math.hypot(groupMatrix.a, groupMatrix.b) : 100
+      const settings = useMeasureSnapSettings.getState()
+      const reachScale = MEASURE_SNAP_STRENGTH_SCALE[settings.strength]
       const target = event.altKey
         ? null
         : resolveMeasureSnap(
@@ -979,6 +995,7 @@ export function FloorplanMeasurementToolLayer() {
             [plan.x, plan.z],
             pixelsPerMetre,
             heldSnapTarget,
+            { corners: settings.corners, faces: settings.faces, reachScale },
           )
       heldSnapTarget = target
       // Off the walls, other kinds still pull through their projected plan geometry.
@@ -1004,11 +1021,11 @@ export function FloorplanMeasurementToolLayer() {
       const lastPoint = draft.points.at(-1)
       // On a wall face, square up with the previous point where the face crosses its axes.
       const faceLine = target?.kind === 'face' ? faceLineOf(target.face) : null
-      if (faceLine && lastPoint && !event.altKey && !anchorsOverride) {
-        const squared = squareOnFace(faceLine, lastPoint).filter(
+      if (faceLine && lastPoint && settings.squareUp && !event.altKey && !anchorsOverride) {
+        const squared = squareOnFace(faceLine, lastPoint, settings.diagonals).filter(
           (candidate) =>
             screenDistanceToPlanPoint(group, candidate.point, event.clientX, event.clientY) <=
-            FACE_AXIS_SNAP_DISTANCE_PX,
+            FACE_AXIS_SNAP_DISTANCE_PX * reachScale,
         )
         const best = squared.sort(
           (a, b) =>
@@ -1020,12 +1037,16 @@ export function FloorplanMeasurementToolLayer() {
             markerKind: 'wall',
             ...(targetNodeId ? { markerWallId: targetNodeId } : {}),
             point: best.point,
-            guide: {
-              axis: best.axis,
-              from: [...lastPoint] as MeasurementPoint,
-              to: best.point,
-              snapped: true,
-            } satisfies MeasurementAxisGuide,
+            // A 45° crossing has no axis guide to draw.
+            guide:
+              best.axis === 'diagonal'
+                ? null
+                : ({
+                    axis: best.axis,
+                    from: [...lastPoint] as MeasurementPoint,
+                    to: best.point,
+                    snapped: true,
+                  } satisfies MeasurementAxisGuide),
             targetNodeId,
           }
         }
@@ -1036,8 +1057,9 @@ export function FloorplanMeasurementToolLayer() {
         anchorsOverride ?? (lastPoint ? [lastPoint] : []),
         event.clientX,
         event.clientY,
-        !discreteWallSnap && !event.altKey,
-        !event.altKey &&
+        settings.align && !discreteWallSnap && !event.altKey,
+        settings.align &&
+          !event.altKey &&
           !discreteWallSnap &&
           draft.axisGuide?.snapped &&
           draft.axisGuide.axis !== 'y'
@@ -1090,6 +1112,15 @@ export function FloorplanMeasurementToolLayer() {
         resolved,
         targetNodeId,
       })
+      if (settings.diagonals && lastPoint && !target && !resolved.guide?.snapped && !event.altKey) {
+        const diagonal = nearestDiagonal(lastPoint, raw)
+        if (
+          diagonal &&
+          screenDistanceToPlanPoint(group, diagonal, event.clientX, event.clientY) <=
+            FACE_AXIS_SNAP_DISTANCE_PX * reachScale
+        )
+          return { point: diagonal, guide: null, targetNodeId, markerKind, markerWallId }
+      }
       return { ...resolved, targetNodeId, markerKind, markerWallId }
     }
 

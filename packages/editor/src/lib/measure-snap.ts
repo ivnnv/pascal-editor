@@ -61,39 +61,56 @@ export function buildMeasureSnapGeometry(walls: readonly WallNode[]): MeasureSna
  * nearest face. A target already held keeps winning until the pointer leaves
  * its wider release distance, so it does not flicker between neighbours.
  */
+export type MeasureSnapOptions = {
+  corners?: boolean
+  faces?: boolean
+  // Multiplies every catch and release distance.
+  reachScale?: number
+}
+
 export function resolveMeasureSnap(
   geometry: MeasureSnapGeometry,
   pointer: Plan,
   pixelsPerMetre: number,
   held: MeasureSnapTarget | null = null,
+  { corners: useCorners = true, faces: useFaces = true, reachScale = 1 }: MeasureSnapOptions = {},
 ): MeasureSnapTarget | null {
   const px = (p: Plan) => Math.hypot(p[0] - pointer[0], p[1] - pointer[1]) * pixelsPerMetre
+  const reach = {
+    cornerCatch: MEASURE_SNAP_PX.corner.catch * reachScale,
+    cornerRelease: MEASURE_SNAP_PX.corner.release * reachScale,
+    faceCatch: MEASURE_SNAP_PX.face.catch * reachScale,
+    faceRelease: MEASURE_SNAP_PX.face.release * reachScale,
+  }
   let corner: { target: MeasureSnapTarget; distance: number } | null = null
-  for (const c of geometry.corners) {
-    const distance = px(c.point)
-    if (distance <= MEASURE_SNAP_PX.corner.catch && (!corner || distance < corner.distance))
-      corner = { target: { kind: 'corner', point: c.point, wallId: c.wallId }, distance }
+  if (useCorners) {
+    for (const c of geometry.corners) {
+      const distance = px(c.point)
+      if (distance <= reach.cornerCatch && (!corner || distance < corner.distance))
+        corner = { target: { kind: 'corner', point: c.point, wallId: c.wallId }, distance }
+    }
   }
   let face: { target: MeasureSnapTarget; distance: number } | null = null
-  for (const f of geometry.faces) {
-    const point = closestOnSegment(pointer, f.a, f.b)
-    const distance = px(point)
-    if (distance <= MEASURE_SNAP_PX.face.catch && (!face || distance < face.distance))
-      face = { target: { kind: 'face', point, wallId: f.wallId, face: f }, distance }
+  if (useFaces) {
+    for (const f of geometry.faces) {
+      const point = closestOnSegment(pointer, f.a, f.b)
+      const distance = px(point)
+      if (distance <= reach.faceCatch && (!face || distance < face.distance))
+        face = { target: { kind: 'face', point, wallId: f.wallId, face: f }, distance }
+    }
   }
   const fresh = corner?.target ?? face?.target ?? null
-  if (!held || fresh?.kind === 'corner') return fresh
-  // Keep the held target while the pointer stays within its release distance.
-  if (held.kind === 'corner') {
-    return px(held.point) <= MEASURE_SNAP_PX.corner.release ? held : fresh
+  // A held target of a kind just switched off lets go at once.
+  const usable = held && (held.kind === 'corner' ? useCorners : useFaces) ? held : null
+  if (!usable || fresh?.kind === 'corner') return fresh
+  if (usable.kind === 'corner') {
+    return px(usable.point) <= reach.cornerRelease ? usable : fresh
   }
-  const point = closestOnSegment(pointer, held.face.a, held.face.b)
-  if (px(point) > MEASURE_SNAP_PX.face.release) return fresh
-  if (fresh?.kind === 'face' && fresh.wallId !== held.wallId) {
-    const freshDistance = px(fresh.point)
-    if (freshDistance < px(point)) return fresh
-  }
-  return { ...held, point }
+  const point = closestOnSegment(pointer, usable.face.a, usable.face.b)
+  if (px(point) > reach.faceRelease) return fresh
+  if (fresh?.kind === 'face' && fresh.wallId !== usable.wallId && px(fresh.point) < px(point))
+    return fresh
+  return { ...usable, point }
 }
 
 function closestOnSegment(p: Plan, a: Plan, b: Plan): Plan {

@@ -79,22 +79,39 @@ export type FaceLine = {
   max: number
 }
 
-/** Where a face crosses the horizontal and vertical through `from`, within the face. */
+export type SquareAxis = 'x' | 'z' | 'diagonal'
+
+/**
+ * Where a face crosses the horizontal and vertical through `from`, and with
+ * `diagonals` its 45° lines too, keeping only crossings within the face.
+ */
 export function squareOnFace(
   line: FaceLine,
   from: MeasurementPoint,
-): { axis: 'x' | 'z'; point: MeasurementPoint }[] {
-  const out: { axis: 'x' | 'z'; point: MeasurementPoint }[] = []
+  diagonals = false,
+): { axis: SquareAxis; point: MeasurementPoint }[] {
+  const directions: { axis: SquareAxis; d: [number, number] }[] = [
+    { axis: 'x', d: [1, 0] },
+    { axis: 'z', d: [0, 1] },
+    ...(diagonals
+      ? ([
+          { axis: 'diagonal', d: [Math.SQRT1_2, Math.SQRT1_2] },
+          { axis: 'diagonal', d: [Math.SQRT1_2, -Math.SQRT1_2] },
+        ] as { axis: SquareAxis; d: [number, number] }[])
+      : []),
+  ]
+  const out: { axis: SquareAxis; point: MeasurementPoint }[] = []
   const [px, pz] = line.point
-  const [dx, dz] = line.direction
-  const within = (t: number) => t >= line.min - 1e-6 && t <= line.max + 1e-6
-  if (Math.abs(dz) > 1e-6) {
-    const t = (from[2] - pz) / dz
-    if (within(t)) out.push({ axis: 'x', point: [px + dx * t, from[1], from[2]] })
-  }
-  if (Math.abs(dx) > 1e-6) {
-    const t = (from[0] - px) / dx
-    if (within(t)) out.push({ axis: 'z', point: [from[0], from[1], pz + dz * t] })
+  const [fx, fz] = line.direction
+  for (const { axis, d } of directions) {
+    // Solve point + face * t = from + d * s.
+    const det = fx * -d[1] - fz * -d[0]
+    if (Math.abs(det) < 1e-6) continue
+    const rx = from[0] - px
+    const rz = from[2] - pz
+    const t = (rx * -d[1] - rz * -d[0]) / det
+    if (t < line.min - 1e-6 || t > line.max + 1e-6) continue
+    out.push({ axis, point: [px + fx * t, from[1], pz + fz * t] })
   }
   return out
 }
