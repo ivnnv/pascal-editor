@@ -16,19 +16,32 @@ import {
 } from '@pascal-app/core'
 import {
   alignFloorplanDraftPoint,
+  cornerAngle,
+  getActiveSnappingMode,
   getPlanSnapScale,
   getSegmentGridStep,
   isAlignmentGuideActive,
   isAngleSnapActive,
   isMagneticSnapActive,
+  isOnPlanAxis,
   isSegmentLongEnough,
+  jointAngleAt,
   resolveEndpointWallSplit,
   snapBuildingLocalToWorldGrid,
+  snapCornerToAngle,
   snapScalarToGrid,
-  snapWallDraftPoint,
+  snapWallDraftPointDetailed,
   useAlignmentGuides,
+  useJointAngle,
   type WallPlanPoint,
 } from '@pascal-app/editor'
+import {
+  type CornerLine,
+  resolveDirectedCorner,
+  snapWallEndpointToExtension,
+  snapWallEndpointToOrigin,
+  WALL_MOVE_ALIGN_TOLERANCE,
+} from './move-shared'
 
 /**
  * Floor-plan 2D drag affordances for wall.
@@ -221,7 +234,7 @@ export const wallThicknessAffordance: FloorplanAffordance<WallNode> = {
 }
 
 export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
-  start({ node, payload, nodes }): FloorplanAffordanceSession {
+  start({ node, payload, nodes, initialPlanPoint }): FloorplanAffordanceSession {
     const { endpoint } = payload as WallEndpointPayload
     const fixedPoint: WallPlanPoint =
       endpoint === 'start' ? ([...node.end] as WallPlanPoint) : ([...node.start] as WallPlanPoint)
@@ -243,6 +256,12 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
       .filter((w) => pointsEqual(w.start, movingOriginal) || pointsEqual(w.end, movingOriginal))
       .map((w) => w.id)
 
+    // Where the handle was grabbed relative to the corner, so a grab off its
+    // centre does not jump the corner to the cursor.
+    let grabOffset: WallPlanPoint | null = initialPlanPoint
+      ? [movingOriginal[0] - initialPlanPoint[0], movingOriginal[1] - initialPlanPoint[1]]
+      : null
+
     // Remember the latest preview so `commit()` can write it tracked.
     let lastPrimaryStart: WallPlanPoint = originalStart
     let lastPrimaryEnd: WallPlanPoint = originalEnd
@@ -250,7 +269,9 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
 
     return {
       affectedIds,
-      apply({ planPoint, modifiers }) {
+      apply({ planPoint: cursor, modifiers }) {
+        grabOffset ??= [movingOriginal[0] - cursor[0], movingOriginal[1] - cursor[1]]
+        const planPoint: WallPlanPoint = [cursor[0] + grabOffset[0], cursor[1] + grabOffset[1]]
         // Re-collect walls every tick so the snap pipeline sees fresh
         // positions (matters when the user releases + re-grabs without
         // unmounting the layer). Snap reads from scene — which holds
@@ -266,17 +287,18 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
         // the endpoint angle-locks off the fixed corner (free length), matching
         // the draft tool — the angle path ignores the `gridSnap` override.
         const angleLocked = isAngleSnapActive()
-        const snapped = snapWallDraftPoint({
+        const snapResult = snapWallDraftPointDetailed({
           point: planPoint as WallPlanPoint,
           walls,
           ignoreWallIds: staleWallIds,
-          start: angleLocked ? fixedPoint : undefined,
+          start: fixedPoint,
           angleSnap: angleLocked,
           magnetic: isMagneticSnapActive(),
           gridSnap: (p) => snapBuildingLocalToWorldGrid(p, getSegmentGridStep()),
           // AIKAZA: reach a fixed distance on screen, whatever the zoom.
           planScale: getPlanSnapScale(),
         })
+        const snapped = snapResult.point
         // Figma-style alignment on the dragged corner — snaps it onto another
         // object's edge / wall face and publishes a guide. The guide is
         // DISPLAYED in every mode except Off (isAlignmentGuideActive); the
@@ -292,9 +314,102 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           excludeIds: staleWallIds,
           levelId: parentId,
         }) as WallPlanPoint
+        const extensionWalls = walls.filter((wall) => !staleWallIds.includes(wall.id))
+        const direction = snapResult.snap ? undefined : snapResult.direction
+        let placed: WallPlanPoint
+        let onExtension = false
+        if (direction && getActiveSnappingMode() !== 'off') {
+          // The angle snap fixed the wall's direction: the corner stays on it,
+          // where it crosses the nearest line in reach (its start's x / z line,
+          // a guide's line, or another wall's continuation).
+          const raw = planPoint as WallPlanPoint
+          const lines: CornerLine[] = []
+          if (Math.abs(raw[1] - movingOriginal[1]) <= WALL_MOVE_ALIGN_TOLERANCE)
+            lines.push({ point: movingOriginal, along: [1, 0] })
+          if (Math.abs(raw[0] - movingOriginal[0]) <= WALL_MOVE_ALIGN_TOLERANCE)
+            lines.push({ point: movingOriginal, along: [0, 1] })
+          if (aligned[0] !== snapped[0]) lines.push({ point: aligned, along: [0, 1] })
+          if (aligned[1] !== snapped[1]) lines.push({ point: aligned, along: [1, 0] })
+          const extension = isMagneticSnapActive()
+            ? snapWallEndpointToExtension(raw, snapped, movingOriginal, extensionWalls)
+            : null
+          if (extension) {
+            const { from, to } = extension.guide
+            const length = Math.hypot(to.x - from.x, to.z - from.z)
+            if (length > 1e-9)
+              lines.push({
+                point: [from.x, from.z],
+                along: [(to.x - from.x) / length, (to.z - from.z) / length],
+                guide: extension.guide,
+              })
+          }
+          const resolved = resolveDirectedCorner(fixedPoint, direction, snapped, lines)
+          placed = resolved.point
+          if (resolved.line?.guide) {
+            onExtension = true
+            useAlignmentGuides
+              .getState()
+              .set([{ ...resolved.line.guide, to: { x: placed[0], z: placed[1] } }])
+          }
+        } else {
+          // The corner can always go back where it started, or keep its x / z line,
+          // unless it is joining another wall.
+          placed =
+            getActiveSnappingMode() === 'off' || snapResult.snap
+              ? aligned
+              : snapWallEndpointToOrigin(planPoint as WallPlanPoint, aligned, movingOriginal)
+          // Or onto another wall's continuation, shown as a guide.
+          if (!snapResult.snap && isMagneticSnapActive()) {
+            const extension = snapWallEndpointToExtension(
+              planPoint as WallPlanPoint,
+              placed,
+              movingOriginal,
+              extensionWalls,
+            )
+            if (extension) {
+              placed = extension.point
+              onExtension = true
+              useAlignmentGuides.getState().set([extension.guide])
+            }
+          }
+        }
 
-        const primaryStart: WallPlanPoint = endpoint === 'start' ? aligned : fixedPoint
-        const primaryEnd: WallPlanPoint = endpoint === 'end' ? aligned : fixedPoint
+        // The dragged corner squares against the walls that move with it, and
+        // shows the angle it makes there (and at the fixed corner).
+        const movingWalls = modifiers.altKey
+          ? []
+          : linkedWalls.filter((w) => movingLinkedWallIds.includes(w.id))
+        const farEnd = (w: (typeof linkedWalls)[number]): WallPlanPoint =>
+          pointsEqual(w.start, movingOriginal) ? w.end : w.start
+        // Back where it started stays put, so a drag there and back changes nothing.
+        const atOrigin = placed[0] === movingOriginal[0] && placed[1] === movingOriginal[1]
+        // A corner on another wall's continuation keeps that line.
+        // A wall already true to a plan axis keeps it.
+        if (
+          getActiveSnappingMode() !== 'off' &&
+          !snapResult.snap &&
+          !atOrigin &&
+          !onExtension &&
+          !direction &&
+          !isOnPlanAxis(fixedPoint, placed)
+        ) {
+          // The nearest step across the moving walls, not the first one listed.
+          let best: { point: WallPlanPoint; diff: number } | null = null
+          for (const wall of movingWalls) {
+            const candidate = snapCornerToAngle(placed, fixedPoint, farEnd(wall))
+            if (candidate && (!best || candidate.diff < best.diff)) best = candidate
+          }
+          if (best) placed = best.point
+        }
+        const badges = movingWalls.flatMap((wall) => {
+          const thickness = Math.max(node.thickness ?? 0.2, (wall as WallNode).thickness ?? 0.2)
+          const angle = cornerAngle(placed, fixedPoint, farEnd(wall), thickness)
+          return angle ? [angle] : []
+        })
+        const pivot = jointAngleAt(fixedPoint, placed, walls, staleWallIds)
+        useJointAngle.getState().set(pivot ? [...badges, pivot] : badges)
+        const primaryStart: WallPlanPoint = endpoint === 'start' ? placed : fixedPoint
+        const primaryEnd: WallPlanPoint = endpoint === 'end' ? placed : fixedPoint
 
         // ALT detaches: the linked walls keep their original endpoints,
         // and only the dragged wall moves.

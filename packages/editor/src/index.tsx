@@ -196,11 +196,15 @@ export {
 export { preloadRegistryToolModules, ToolManager } from './components/tools/tool-manager'
 export {
   chainEndJoinsExistingWall,
+  cornerAngle,
   createWallOnCurrentLevel,
   findWallSnapTarget,
   getSegmentGridStep,
+  isOnPlanAxis,
   isSegmentLongEnough,
+  jointAngleAt,
   resolveEndpointWallSplit,
+  snapCornerToAngle,
   snapPointToGrid,
   snapScalarToGrid,
   snapWallDraftPoint,
@@ -773,9 +777,12 @@ export {
   cycleSnappingModeIn,
   getSnappingModeLabel,
   resolveSnapFlags,
+  SMART_ANGLE_TOLERANCE,
+  SMART_SNAP_TOLERANCE,
   type SnapContext,
   type SnapFlags,
   type SnappingMode,
+  softSnapScalar,
 } from './lib/snapping-mode'
 export { getSpatialPointerId, spatialPointerInput } from './lib/spatial-pointer-input'
 export { duplicateStairSubtree } from './lib/stair-duplication'
@@ -903,6 +910,7 @@ export {
   useMovingNode,
   useReshapingNode,
 } from './store/use-interaction-scope'
+export { default as useJointAngle } from './store/use-joint-angle'
 export {
   commitMeasurementDraft,
   finishMeasurementDraft,
