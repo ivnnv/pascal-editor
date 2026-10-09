@@ -823,19 +823,6 @@ function FloorplanExtrusionControl({
   )
 }
 
-// DEBUG(measure): remove once the measure snapping is confirmed.
-const round = (value: unknown): unknown =>
-  typeof value === 'number'
-    ? Math.round(value * 1000) / 1000
-    : Array.isArray(value)
-      ? value.map(round)
-      : value && typeof value === 'object'
-        ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, round(v)]))
-        : value
-function logMeasure(stage: string, data: Record<string, unknown>) {
-  console.log(`[measure:${stage}]`, JSON.stringify(round(data)))
-}
-
 // AIKAZA: a measure's direction against the plan axes, to one decimal so a line
 // a fraction of a degree off straight shows it.
 function lineAngleText(start: readonly number[], end: readonly number[]): string {
@@ -1088,30 +1075,9 @@ export function FloorplanMeasurementToolLayer() {
             null,
             [], // AIKAZA: align only with the measure's own points, not other walls' corners
           )
-          // DEBUG(measure): remove once the measure snapping is confirmed.
-          logMeasure('axis-unverified', {
-            plan,
-            projectedSnap,
-            target,
-            discreteWallSnap,
-            raw,
-            resolved,
-            surfaceOnly,
-            targetNodeId,
-          })
           return { ...surfaceOnly, targetNodeId, markerKind, markerWallId }
         }
       }
-      // DEBUG(measure): remove once the measure snapping is confirmed.
-      logMeasure('resolve', {
-        plan,
-        projectedSnap,
-        target,
-        discreteWallSnap,
-        raw,
-        resolved,
-        targetNodeId,
-      })
       if (settings.diagonals && lastPoint && !target && !resolved.guide?.snapped && !event.altKey) {
         const diagonal = nearestDiagonal(lastPoint, raw)
         if (
@@ -1143,8 +1109,6 @@ export function FloorplanMeasurementToolLayer() {
         ),
       )
       useWallSnapIndicator.getState().set(resolved.marker)
-      // DEBUG(measure): remove once the measure snapping is confirmed.
-      logMeasure('final', { raw: raw.point, point: resolved.point, marker: resolved.marker })
       return resolved
     }
 
@@ -1252,15 +1216,6 @@ export function FloorplanMeasurementToolLayer() {
       if (draft.stage !== 'collecting') return
       const resolved = resolveEventPoint(event)
       const associated = resolved
-      // DEBUG(measure): remove once the measure snapping is confirmed.
-      logMeasure('hover', {
-        client: [event.clientX, event.clientY],
-        points: draft.points,
-        resolved: resolved?.point ?? null,
-        associated: associated?.point ?? null,
-        anchor: associated?.anchor ?? null,
-        semantic: associated?.semantic ?? null,
-      })
       draft.setHover(
         '2d',
         resolved && associated
@@ -1336,14 +1291,6 @@ export function FloorplanMeasurementToolLayer() {
       const resolved = resolveEventPoint(event)
       if (!resolved) return
       const associated = resolved
-      // DEBUG(measure): remove once the measure snapping is confirmed.
-      logMeasure('click', {
-        client: [event.clientX, event.clientY],
-        kind: draft.kind,
-        before: draft.points,
-        added: associated.point,
-        anchor: associated.anchor,
-      })
       if (!draft.addPoint('2d', associated.point, associated.anchor)) return
       if (useMeasurementDraft.getState().stage === 'ready') commitMeasurementDraft('2d')
     }
@@ -1526,17 +1473,6 @@ export function FloorplanMeasurementToolLayer() {
     vertexDrag,
   ])
 
-  // DEBUG(measure): remove once the measure snapping is confirmed.
-  logMeasure('draw', {
-    smartActive,
-    active,
-    stage,
-    hoverOwner,
-    hover: hover?.point ?? null,
-    points,
-    segmentLabel: preview.segmentLabel?.text ?? null,
-    label: preview.label?.text ?? null,
-  })
   if (smartActive) return <FloorplanQuickMeasureLayer />
   if (!active || (draftLevelId && draftLevelId !== activeLevelId)) return null
   const unitsPerPixel = renderContext?.unitsPerPixel ?? 0.01
