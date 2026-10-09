@@ -45,6 +45,7 @@ type MeasureSnapToggle = Exclude<keyof MeasureSnapSettings, 'strength'>
 type MeasureSnapSettingsState = MeasureSnapSettings & {
   toggle: (key: MeasureSnapToggle) => void
   cycleStrength: () => void
+  setStrength: (strength: MeasureSnapStrength) => void
 }
 
 const useMeasureSnapSettings = create<MeasureSnapSettingsState>()(
@@ -53,6 +54,7 @@ const useMeasureSnapSettings = create<MeasureSnapSettingsState>()(
       ...DEFAULT_MEASURE_SNAP_SETTINGS,
       toggle: (key) => set((state) => ({ [key]: !state[key] }) as Partial<MeasureSnapSettings>),
       cycleStrength: () => set((state) => ({ strength: NEXT_STRENGTH[state.strength] })),
+      setStrength: (strength) => set({ strength }),
     }),
     {
       name: 'pascal-measure-snap-settings',

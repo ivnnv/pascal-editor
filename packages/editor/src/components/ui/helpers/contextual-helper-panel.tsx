@@ -22,6 +22,7 @@ import useFenceCurveDraft from '../../../store/use-fence-curve-draft'
 import useMeasureSnapSettings from '../../../store/use-measure-snap-settings'
 import { IconRefGlyph } from '../icon-ref'
 import { ShortcutToken } from '../primitives/shortcut-token'
+import { Switch } from '../primitives/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
 import { useInRightStack } from '../right-stack'
 
@@ -231,28 +232,56 @@ const MEASURE_SNAP_TOGGLES = [
   { key: 'align', label: 'Align', tooltip: 'Line up with the measure’s own points' },
 ] as const
 
-const STRENGTH_LABELS = { gentle: 'Gentle', normal: 'Normal', strong: 'Strong' } as const
+const STRENGTH_OPTIONS = [
+  { value: 'gentle', label: 'Gentle' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'strong', label: 'Strong' },
+] as const
 
 function MeasureSnapChips() {
   const settings = useMeasureSnapSettings()
   return (
-    <>
+    <div className="pointer-events-auto col-span-2 mt-0.5 flex flex-col gap-1.5">
+      <div className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">
+        Snapping
+      </div>
       {MEASURE_SNAP_TOGGLES.map(({ key, label, tooltip }) => (
-        <ChipRow
-          ariaLabel={`${label}: ${settings[key] ? 'on' : 'off'}`}
+        <label
+          className="flex cursor-pointer items-center justify-between gap-3 text-foreground/90 text-xs"
           key={key}
-          label={`${label}: ${settings[key] ? 'On' : 'Off'}`}
-          onClick={() => settings.toggle(key)}
-          tooltip={tooltip}
-        />
+          title={tooltip}
+        >
+          <span>{label}</span>
+          <Switch
+            aria-label={label}
+            checked={settings[key]}
+            className="scale-90"
+            onCheckedChange={() => settings.toggle(key)}
+          />
+        </label>
       ))}
-      <ChipRow
-        ariaLabel={`Snap strength: ${STRENGTH_LABELS[settings.strength]}`}
-        label={`Strength: ${STRENGTH_LABELS[settings.strength]}`}
-        onClick={settings.cycleStrength}
-        tooltip="How far snaps reach — click to cycle"
-      />
-    </>
+      <div className="flex items-center justify-between gap-3 text-foreground/90 text-xs">
+        <span title="How far snaps reach">Strength</span>
+        <div className="flex rounded-md bg-white/5 p-0.5">
+          {STRENGTH_OPTIONS.map(({ value, label }) => (
+            <button
+              aria-pressed={settings.strength === value}
+              className={cn(
+                'rounded px-1.5 py-0.5 text-[11px] transition-colors',
+                settings.strength === value
+                  ? 'bg-[var(--toggle-on,var(--primary))] text-white'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+              key={value}
+              onClick={() => settings.setStrength(value)}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }
 
