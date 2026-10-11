@@ -65,7 +65,9 @@ Each entry: decision · why · enforced by · revisit when. Detail and examples 
 
 **E-015 Public-repo hygiene (2026-10-01).** This repo is open source: no private plan paths in docs or skills (cite a wiki page or a decision ID), maintainer skills carry `metadata.internal: true`, product skills under `skills/` are the only discoverable ones. · Enforced: `scripts/validate-skills.ts` + policy tests.
 
-**E-016 Shift holds snapping off (2026-10-07).** The snapping mode changes from its chip (or the snapping pill shown while the hints panel is closed or folded), never from a key tap. Holding Shift turns snapping off while held, and the chip says so; the held state lives in `useSnappingHold`, never in `event.shiftKey`. Alt keeps E-004's raw-cursor meaning. · Why: a Shift tap, also used to add to a selection, changed the mode unnoticed; with the mode always shown, a held key is discoverable. · Supersedes E-004's Shift-tap cycle and its no-held-Shift rule.
+**E-016 Plugins own their agent tools (owner, 2026-10-10).** A plugin's agent tools ship with the plugin, not in core: contracts as a `PluginAgentTools` in its `./agent-tools` export (zod only, like `core/agent-tools`, and versioned by the plugin), pure operations as an `AgentOperations` in `./agent-operations`, browser execution and cards as a `PluginChatExtension`. The `Plugin` manifest does not change (E-014), and one contract still serves both surfaces. Contract annotations are hints: the host decides which tools are offered, to whom, and with what authority. These are reviewed, trusted contributions, not a sandbox. · Why: a plugin with dozens of specialist tools keeps them versioned with its own code, and installing it extends every agent the way a connector does. · Enforced: `core/src/agent-tools/contracts-purity.test.ts` (the rule each plugin entry follows), `mcp/src/tools/shared-tools.test.ts` (a plugin's operation tool through a real client), the hosted parity test. · See `plugin-authoring.md`, `agent-surfaces.md`. · Revisit: when plugins are loaded without review.
+
+**E-017 Shift holds snapping off (2026-10-07).** The snapping mode changes from its chip (or the snapping pill shown while the hints panel is closed or folded), never from a key tap. Holding Shift turns snapping off while held, and the chip says so; the held state lives in `useSnappingHold`, never in `event.shiftKey`. Alt keeps E-004's raw-cursor meaning. · Why: a Shift tap, also used to add to a selection, changed the mode unnoticed; with the mode always shown, a held key is discoverable. · Supersedes E-004's Shift-tap cycle and its no-held-Shift rule.
 
 ## Testing
 
@@ -80,5 +82,5 @@ Each entry: decision · why · enforced by · revisit when. Detail and examples 
 
 ## Superseded
 
-- E-004's "Shift *tap* cycles the mode; no held-Shift bypass" → replaced by E-016 on 2026-10-07.
+- E-004's "Shift *tap* cycles the mode; no held-Shift bypass" → replaced by E-017 on 2026-10-07.
 - "No massive rewrites unless warranted" (AGENTS.md, 2026-05) → replaced by the first working agreement on 2026-10-01: the codebase can be in a wrong shape and the rule was keeping it there.
