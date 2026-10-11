@@ -653,7 +653,7 @@ export function SettingsPanel({
     // old scene (or land on the empty intermediate `unloadScene` state).
     clearSceneHistory()
     resetSelection()
-    setPhase('structure')
+    setPhase('building')
     selectDefaultBuildingAndLevel()
   }
 

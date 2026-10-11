@@ -327,10 +327,13 @@ export {
   ViewerControlsBar,
   type ViewerControlsBarProps,
 } from './components/viewer/viewer-controls-bar'
+export { ViewerHoverLabel } from './components/viewer/viewer-hover-label'
+export { ParametricViewerRooms, ViewerRooms } from './components/viewer/viewer-rooms'
 export {
   ViewerSceneHeader,
   type ViewerSceneHeaderProps,
 } from './components/viewer/viewer-scene-header'
+export { ViewerSelectionManager } from './components/viewer/viewer-selection-manager'
 export { ViewerStage, type ViewerStageProps } from './components/viewer/viewer-stage'
 export {
   normalizeViewerStageModes,
@@ -344,7 +347,6 @@ export {
   ViewerStageSwitcher,
   type ViewerStageSwitcherProps,
 } from './components/viewer/viewer-stage-switcher'
-export { ViewerUnitsPanel } from './components/viewer/viewer-units-panel'
 export {
   WalkthroughHud,
   type WalkthroughHudProps,
@@ -411,6 +413,12 @@ export {
   openDoorOpenState,
 } from './lib/door-interaction'
 export { createEditorApi } from './lib/editor-api'
+export {
+  type EditorHostView,
+  editorHostViewRegistry,
+  openEditorView,
+  registerEditorHostView,
+} from './lib/editor-views'
 export {
   clearStructuralElevationGuide,
   collectElevationSnapTargets,
@@ -713,13 +721,21 @@ export {
   type PlanarPoint,
   resolvePlanarCursorPosition,
 } from './lib/planar-cursor-placement'
+export type {
+  ChatToolCardProps,
+  ChatToolOutput,
+  PluginChatExtension,
+} from './lib/plugin-chat'
 export {
   type EditorHostPanel,
   type EditorHostPanelWorkspace,
   editorHostPanelRegistry,
+  type PluginAccess,
+  type PluginDirectoryContext,
   type PluginInstallLock,
   pluginInstallLocks,
   registerEditorHostPanel,
+  setPluginDirectoryContext,
   setPluginInstallLocks,
 } from './lib/plugin-panels'
 export { configureManifoldRuntime } from './lib/print-shell-compiler-manifold-worker'
@@ -747,7 +763,7 @@ export {
   type ElementActionOrigin,
 } from './lib/room-zone-routing'
 export type { SceneGraph } from './lib/scene'
-export { applySceneGraphToEditor } from './lib/scene'
+export { applySceneGraphToEditor, getSavedSceneDocument } from './lib/scene'
 export {
   forEachSceneMaterialRef,
   referencedSceneMaterialIds,
@@ -818,6 +834,15 @@ export { useLinearDisplay } from './lib/use-linear-display'
 // dependency.
 export { cn } from './lib/utils'
 export {
+  applyViewerClick,
+  applyViewerHover,
+  framedLookAt,
+  frameViewerCamera,
+  useViewerFloorDisplay,
+  type ViewerPick,
+  type ViewerSource,
+} from './lib/viewer-selection'
+export {
   getWallDrawVariant,
   selectWallDrawVariant,
   useWallDrawVariant,
@@ -861,7 +886,6 @@ export type {
   Mode,
   SnapshotCropMode,
   SnapshotStandardAspect,
-  SplitOrientation,
   StructureTool,
   Tool,
   ToolDefaults,
@@ -958,3 +982,14 @@ export {
   type WallSnapKind,
   type WallSnapPoint,
 } from './store/use-wall-snap-indicator'
+export {
+  activeViewLayout,
+  isViewVisible,
+  sceneLayout,
+  VIEW_2D,
+  VIEW_3D,
+  type ViewLayout,
+  type ViewPaneIndex,
+  type VisibleScene,
+  visibleScene,
+} from './store/view-layout'
