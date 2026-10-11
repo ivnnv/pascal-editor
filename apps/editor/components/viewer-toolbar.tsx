@@ -15,7 +15,7 @@ import {
   useFloorplanAnnotationVisibility,
   useFloorplanMode,
   useSidebarStore,
-  type ViewMode,
+  visibleScene,
 } from '@pascal-app/editor'
 import {
   CLAY_PALETTE,
@@ -30,7 +30,6 @@ import {
   ChevronDown,
   ChevronsLeft,
   ChevronsRight,
-  Columns2,
   Contrast,
   Eye,
   EyeOff,
@@ -86,40 +85,6 @@ function ToolbarTooltip({ children, label }: { children: ReactNode; label: strin
   )
 }
 
-const VIEW_MODES: { id: ViewMode; label: string; icon: React.ReactNode }[] = [
-  {
-    id: '3d',
-    label: '3D',
-    icon: (
-      <Image
-        alt=""
-        className="h-3.5 w-3.5 object-contain"
-        height={14}
-        src="/icons/building.webp"
-        width={14}
-      />
-    ),
-  },
-  {
-    id: '2d',
-    label: '2D',
-    icon: (
-      <Image
-        alt=""
-        className="h-3.5 w-3.5 object-contain"
-        height={14}
-        src="/icons/blueprint.webp"
-        width={14}
-      />
-    ),
-  },
-  {
-    id: 'split',
-    label: 'Split',
-    icon: <Columns2 className="h-3 w-3" />,
-  },
-]
-
 const levelModeOrder = ['stacked', 'exploded', 'solo'] as const
 const levelModeLabels: Record<string, string> = {
   manual: 'Stack',
@@ -170,39 +135,6 @@ const FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS = [
   { id: 'stud-faces', name: 'Face of stud', detail: 'Structural core face' },
 ] as const
 
-function ViewModeControl() {
-  const viewMode = useEditor((state) => state.viewMode)
-  const setViewMode = useEditor((state) => state.setViewMode)
-
-  return (
-    <div className={TOOLBAR_CONTAINER}>
-      {VIEW_MODES.map((mode) => {
-        const isActive = viewMode === mode.id
-        return (
-          <ToolbarTooltip key={mode.id} label={mode.label}>
-            <button
-              aria-label={mode.label}
-              aria-pressed={isActive}
-              className={cn(
-                'flex items-center justify-center gap-1.5 px-2.5 font-medium text-xs transition-colors',
-                isActive
-                  ? 'bg-white/10 text-foreground'
-                  : 'text-muted-foreground/70 hover:bg-white/8 hover:text-muted-foreground',
-              )}
-              onClick={() => setViewMode(mode.id)}
-              type="button"
-            >
-              {mode.icon}
-              <span>{mode.label}</span>
-            </button>
-          </ToolbarTooltip>
-        )
-      })}
-      <DragControl />
-    </div>
-  )
-}
-
 const DRAG_OPTIONS: { id: RightDragAction; label: string }[] = [
   { id: 'rotate', label: 'Right-drag rotates' },
   { id: 'pan', label: 'Right-drag moves, middle-drag rotates' },
@@ -217,11 +149,7 @@ function DragControl() {
     <DropdownMenu>
       <ToolbarTooltip label="Mouse navigation">
         <DropdownMenuTrigger asChild>
-          <button
-            aria-label="Mouse navigation"
-            className={cn(TOOLBAR_BTN, 'w-6 border-border/40 border-l')}
-            type="button"
-          >
+          <button aria-label="Mouse navigation" className={cn(TOOLBAR_BTN, 'w-6')} type="button">
             <ChevronDown className="h-3.5 w-3.5" />
           </button>
         </DropdownMenuTrigger>
@@ -356,7 +284,7 @@ const EDGE_OPTIONS = [
 const SUBMENU_CONTENT_CLASS = 'min-w-56 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl'
 
 function DisplayMenu() {
-  const viewMode = useEditor((state) => state.viewMode)
+  const scene = useEditor(visibleScene)
   const showGrid = useViewer((state) => state.showGrid)
   const setShowGrid = useViewer((state) => state.setShowGrid)
   const showMeasurements = useViewer((state) => state.showMeasurements)
@@ -428,12 +356,12 @@ function DisplayMenu() {
             <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
           )}
         </DropdownMenuItem>
-        {viewMode !== '2d' ? (
+        {scene === '3d' || scene === 'split' ? (
           <DropdownMenuItem
             onSelect={(e) => keepOpen(e, () => setShowMeasurements(!showMeasurements))}
           >
             <Ruler className="h-4 w-4" />
-            <span>{viewMode === 'split' ? '3D measurements' : 'Measurements'}</span>
+            <span>{scene === 'split' ? '3D measurements' : 'Measurements'}</span>
             {showMeasurements ? (
               <Eye className="ml-auto h-4 w-4 text-foreground" />
             ) : (
@@ -441,7 +369,7 @@ function DisplayMenu() {
             )}
           </DropdownMenuItem>
         ) : null}
-        {viewMode !== '3d' ? (
+        {scene === '2d' || scene === 'split' ? (
           <>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
@@ -763,7 +691,6 @@ export function CommunityViewerToolbarLeft() {
   return (
     <>
       <CollapseSidebarButton />
-      <ViewModeControl />
     </>
   )
 }
@@ -787,6 +714,7 @@ export function CommunityViewerToolbarRight({
       <WallModeToggle />
       <div className="my-1.5 w-px bg-border/50" />
       <DisplayMenu />
+      <DragControl />
       <div className="my-1.5 w-px bg-border/50" />
       <WalkthroughButton />
       {onVRToggle || vrButton
