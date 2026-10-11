@@ -874,6 +874,14 @@ export function FloorplanMeasurementToolLayer() {
   const error = useMeasurementDraft((state) => state.error)
   const draftLevelId = useMeasurementDraft((state) => state.levelId)
   const activeLevelId = useViewer((state) => state.selection.levelId)
+
+  // AIKAZA: an unfinished measure never outlives the tool. Leaving it, or
+  // coming back to it, always starts from nothing.
+  useEffect(() => {
+    if (!active) return
+    useMeasurementDraft.getState().reset()
+    return () => useMeasurementDraft.getState().reset()
+  }, [active])
   const unit = useViewer((state) => state.unit)
   const metricNotation = useViewer((state) => state.metricNotation)
 
