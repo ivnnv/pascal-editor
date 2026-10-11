@@ -1140,7 +1140,15 @@ export function FloorplanMeasurementToolLayer() {
     }
     cancelVertexGesture.current = () => clearVertexGesture(false)
 
+    // AIKAZA: a click only places a point when its press started on the plan. A
+    // toolbar press can end over the plan (the button re-renders), and that
+    // click must not become a stray first point.
+    let pressStartedOnPlan = false
+    const onAnyPointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Node && svg.contains(event.target))) pressStartedOnPlan = false
+    }
     const onPointerDown = (event: PointerEvent) => {
+      pressStartedOnPlan = event.button === 0
       const draft = useMeasurementDraft.getState()
       if (event.button !== 0 || (draft.owner && draft.owner !== '2d')) return
       if (isExtrusionControlTarget(event.target)) return
@@ -1286,6 +1294,9 @@ export function FloorplanMeasurementToolLayer() {
     const onClick = (event: MouseEvent) => {
       const draft = useMeasurementDraft.getState()
       if (event.button !== 0 || (draft.owner && draft.owner !== '2d')) return
+      const pressedHere = pressStartedOnPlan
+      pressStartedOnPlan = false
+      if (!pressedHere) return
       if (isExtrusionControlTarget(event.target)) return
       consume(event)
       if (suppressNextClick.current) {
@@ -1339,9 +1350,11 @@ export function FloorplanMeasurementToolLayer() {
     svg.addEventListener('pointercancel', onPointerCancel, true)
     svg.addEventListener('pointerleave', onPointerLeave, true)
     svg.addEventListener('click', onClick, true)
+    window.addEventListener('pointerdown', onAnyPointerDown, true)
     svg.addEventListener('dblclick', onDoubleClick, true)
     window.addEventListener('blur', onBlur)
     return () => {
+      window.removeEventListener('pointerdown', onAnyPointerDown, true)
       cancelVertexGesture.current = () => {}
       clearVertexGesture(false)
       clearSurfacePlanSnapFeedback()
