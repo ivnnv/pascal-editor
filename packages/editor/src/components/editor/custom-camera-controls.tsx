@@ -366,6 +366,8 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
   })
   const keyboardPanMotion = useRef(createKeyboardPanMotion())
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
+  // Swapped buttons pan on right-drag and rotate on middle-drag.
+  const buttonsSwapped = useEditor((s) => s.rightDragAction === 'pan')
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const allowUndergroundCamera = useEditor((s) => s.allowUndergroundCamera)
   const selection = useViewer((s) => s.selection)
@@ -773,11 +775,15 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     // Left click selects, in Preview as in the published viewer.
     return {
       left: CameraControlsImpl.ACTION.NONE,
-      middle: CameraControlsImpl.ACTION.SCREEN_PAN,
-      right: CameraControlsImpl.ACTION.ROTATE,
+      middle: buttonsSwapped
+        ? CameraControlsImpl.ACTION.ROTATE
+        : CameraControlsImpl.ACTION.SCREEN_PAN,
+      right: buttonsSwapped
+        ? CameraControlsImpl.ACTION.SCREEN_PAN
+        : CameraControlsImpl.ACTION.ROTATE,
       wheel: wheelAction,
     }
-  }, [cameraMode])
+  }, [buttonsSwapped, cameraMode])
 
   // Touch gestures (mobile / trackpad).
   // - One finger drag    → rotate by default (much easier on a phone), but
@@ -891,8 +897,12 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
           ? CameraControlsImpl.ACTION.ZOOM
           : CameraControlsImpl.ACTION.DOLLY
       controls.current.mouseButtons.wheel = wheelAction
-      controls.current.mouseButtons.middle = CameraControlsImpl.ACTION.SCREEN_PAN
-      controls.current.mouseButtons.right = CameraControlsImpl.ACTION.ROTATE
+      controls.current.mouseButtons.middle = buttonsSwapped
+        ? CameraControlsImpl.ACTION.ROTATE
+        : CameraControlsImpl.ACTION.SCREEN_PAN
+      controls.current.mouseButtons.right = buttonsSwapped
+        ? CameraControlsImpl.ACTION.SCREEN_PAN
+        : CameraControlsImpl.ACTION.ROTATE
       if (space) {
         controls.current.mouseButtons.left = CameraControlsImpl.ACTION.SCREEN_PAN
       } else {
@@ -1029,7 +1039,14 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       clearNavigationCursor()
       cameraDraggingLifecycle.end()
     }
-  }, [beginLocalCameraInteraction, cameraDraggingLifecycle, cameraMode, gl, isFirstPersonMode])
+  }, [
+    beginLocalCameraInteraction,
+    buttonsSwapped,
+    cameraDraggingLifecycle,
+    cameraMode,
+    gl,
+    isFirstPersonMode,
+  ])
 
   // `controlstart` fires only for user pointer interactions. Pointerdowns
   // mapped to ACTION.NONE must not flag the camera as dragging because no

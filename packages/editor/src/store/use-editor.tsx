@@ -229,6 +229,8 @@ export type CatalogCategory =
   | 'door'
 
 export type FloorplanSelectionTool = 'click' | 'marquee'
+/** What a right-button drag does in the 3D and 2D views; `pan` moves rotation to the middle button. */
+export type RightDragAction = 'rotate' | 'pan'
 export type GridSnapStep = 0.5 | 0.25 | 0.1 | 0.05
 
 export type NavigationSyncSource = '2d' | '3d'
@@ -496,6 +498,8 @@ type EditorState = {
   publishNavigationSyncPose: (pose: NavigationSyncPoseInput) => void
   floorplanSelectionTool: FloorplanSelectionTool
   setFloorplanSelectionTool: (tool: FloorplanSelectionTool) => void
+  rightDragAction: RightDragAction
+  setRightDragAction: (action: RightDragAction) => void
   gridSnapStep: GridSnapStep
   setGridSnapStep: (step: GridSnapStep) => void
   // Cycles the grid step through GRID_SNAP_STEPS (0.5 → 0.25 → 0.1 → 0.05 →
@@ -590,6 +594,7 @@ type PersistedEditorLayoutState = Pick<
   | 'activeSidebarPanel'
   | 'pinnedViews'
   | 'floorplanSelectionTool'
+  | 'rightDragAction'
   | 'gridSnapStep'
   | 'magneticSnap'
   | 'lastMeasurementKind'
@@ -614,6 +619,7 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
   activeSidebarPanel: DEFAULT_ACTIVE_SIDEBAR_PANEL,
   pinnedViews: {},
   floorplanSelectionTool: 'click',
+  rightDragAction: 'rotate',
   gridSnapStep: 0.5,
   magneticSnap: true,
   lastMeasurementKind: DEFAULT_CREATABLE_MEASUREMENT_KIND,
@@ -862,6 +868,7 @@ export function normalizePersistedEditorLayoutState(
         : DEFAULT_ACTIVE_SIDEBAR_PANEL,
     pinnedViews: normalizePinnedViews(state?.pinnedViews),
     floorplanSelectionTool: state?.floorplanSelectionTool === 'marquee' ? 'marquee' : 'click',
+    rightDragAction: state?.rightDragAction === 'pan' ? 'pan' : 'rotate',
     gridSnapStep: GRID_SNAP_STEPS.includes(state?.gridSnapStep as GridSnapStep)
       ? (state?.gridSnapStep as GridSnapStep)
       : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
@@ -1500,6 +1507,8 @@ const useEditor = create<EditorState>()(
       },
       floorplanSelectionTool: 'click' as FloorplanSelectionTool,
       setFloorplanSelectionTool: (tool) => set({ floorplanSelectionTool: tool }),
+      rightDragAction: 'rotate' as RightDragAction,
+      setRightDragAction: (action) => set({ rightDragAction: action }),
       gridSnapStep: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
       setGridSnapStep: (step) => set({ gridSnapStep: step }),
       cycleGridSnapStep: () => {
@@ -1638,6 +1647,7 @@ const useEditor = create<EditorState>()(
         activeSidebarPanel: state.activeSidebarPanel,
         pinnedViews: state.pinnedViews,
         floorplanSelectionTool: state.floorplanSelectionTool,
+        rightDragAction: state.rightDragAction,
         gridSnapStep: state.gridSnapStep,
         magneticSnap: state.magneticSnap,
         lastMeasurementKind: state.lastMeasurementKind,
