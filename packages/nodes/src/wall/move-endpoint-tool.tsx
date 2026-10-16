@@ -27,6 +27,7 @@ import {
   isMagneticSnapActive,
   isOnPlanAxis,
   isSegmentLongEnough,
+  isTypingTarget,
   MeasurementPill,
   markToolCancelConsumed,
   resolveEndpointWallSplit,
@@ -716,9 +717,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return
-      }
+      if (isTypingTarget(event.target)) return
       if (event.key === 'Alt') {
         setAltState(true)
       }
@@ -801,7 +800,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
               <div
                 className={`whitespace-nowrap rounded-full border px-2 py-1 font-medium text-[11px] shadow-lg backdrop-blur-md transition-colors ${
                   altPressed
-                    ? 'border-amber-500/80 bg-amber-500/15 text-amber-100'
+                    ? 'border-amber-500/80 bg-amber-50/95 text-amber-800 dark:bg-amber-500/15 dark:text-amber-100'
                     : 'border-border bg-background/95 text-muted-foreground'
                 }`}
               >

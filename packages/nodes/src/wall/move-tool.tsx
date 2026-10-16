@@ -24,6 +24,7 @@ import {
   getActiveSnappingMode,
   getSegmentGridStep,
   isSegmentLongEnough,
+  isTypingTarget,
   markToolCancelConsumed,
   snapBuildingLocalToWorldGrid,
   triggerSFX,
@@ -626,9 +627,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (!active) return
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return
-      }
+      if (isTypingTarget(event.target)) return
 
       const ROTATION_STEP = Math.PI / 4
       let rotationDelta = 0

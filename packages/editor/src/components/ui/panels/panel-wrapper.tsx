@@ -270,7 +270,7 @@ export function PanelWrapper({
           <div className={cn('flex min-w-0 items-center gap-2', titleContent && 'flex-1 pr-2')}>
             {onBack && (
               <button
-                className="mr-1 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+                className="mr-1 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
                 onClick={onBack}
                 type="button"
               >
@@ -317,7 +317,7 @@ export function PanelWrapper({
           <div className="flex items-center gap-1">
             {onReset && (
               <button
-                className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+                className="flex h-7 w-7 items-center justify-center rounded-md bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
                 onClick={onReset}
                 type="button"
               >
@@ -338,8 +338,8 @@ export function PanelWrapper({
                   className={cn(
                     'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
                     isActive
-                      ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30'
-                      : 'bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                      ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-500/30'
+                      : 'bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
                   )}
                   key={extension.id}
                   onClick={() =>
@@ -355,7 +355,7 @@ export function PanelWrapper({
             <button
               aria-expanded={!collapsed}
               aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}
-              className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+              className="flex h-7 w-7 items-center justify-center rounded-md bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
               onClick={handleCardToggle}
               type="button"
             >
@@ -365,7 +365,7 @@ export function PanelWrapper({
             </button>
             {onClose && (
               <button
-                className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+                className="flex h-7 w-7 items-center justify-center rounded-md bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
                 onClick={onClose}
                 type="button"
               >
