@@ -48,6 +48,7 @@ const ActiveOpenWallEndsLayer = memo(function ActiveOpenWallEndsLayer() {
   const { drawing, drafting, ends: visibleEnds, roomlessWallIds, shown } = useOpenWallEnds()
   const focus = useOpenWallEndFocus(visibleEnds, drafting)
   const { activeEnd, activeKey } = focus
+  const selectedIds = useViewer((state) => state.selection.selectedIds)
 
   if (!shown) return null
 
@@ -71,7 +72,8 @@ const ActiveOpenWallEndsLayer = memo(function ActiveOpenWallEndsLayer() {
           <OpenWallEndMarker
             active={key === activeKey}
             end={end}
-            interactive={!!end.candidate && !drafting}
+            // A selected wall's end handle sits under the dot: let it take the drag.
+            interactive={!!end.candidate && !drafting && !selectedIds.includes(end.wallId)}
             key={key}
             label={openWallEndLabel(end, unit)}
             onHoverEnd={focus.releaseHover}
