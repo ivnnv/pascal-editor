@@ -648,6 +648,7 @@ export function FloatingLevelSelector({ besideLeftMenu = false }: { besideLeftMe
           besideLeftMenu ? 'left-[5.5rem]' : 'left-3',
           isMobile ? 'top-14' : 'top-3',
         )}
+        data-menu-obstacle=""
       >
         <div className="relative">
           {/* Floating + at top edge: a floor on top, under the roof level when one tops the stack */}

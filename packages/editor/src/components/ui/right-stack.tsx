@@ -152,7 +152,11 @@ export function RightStack({
         data-right-stack
         ref={stackRef}
       >
-        <div className="flex min-h-0 flex-[0_1_auto] flex-col items-end" ref={inspectorRef}>
+        <div
+          className="flex min-h-0 flex-[0_1_auto] flex-col items-end"
+          data-menu-obstacle=""
+          ref={inspectorRef}
+        >
           {inspector}
         </div>
         <div

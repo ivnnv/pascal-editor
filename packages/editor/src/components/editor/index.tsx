@@ -1846,9 +1846,10 @@ function EditorContent({
                     {!(isVersionPreviewMode || isCaptureMode || isStudioMode) &&
                       !dockMenuOnRight &&
                       (dockMenuOnTop ? (
-                        // Own row under the toolbar, below the level selector's opening list (z-20).
-                        // No transform: the menu's fixed pill must anchor to the scene region.
-                        <div className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center">
+                        // In the toolbar row between the corner chrome, or below it when no gap fits;
+                        // under the level selector's opening list (z-20). No transform: the menu's
+                        // fixed pill must anchor to the scene region.
+                        <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center">
                           <div className="pointer-events-auto">
                             <ActionMenu inline placement="top" />
                           </div>

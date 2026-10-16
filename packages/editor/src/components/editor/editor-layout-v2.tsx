@@ -205,13 +205,17 @@ function StageToolbar({
   return (
     <div className="pointer-events-none absolute top-3 right-0 left-0 z-20 h-8">
       {toolbarLeft && (
-        <div className="pointer-events-auto absolute top-0 left-3 flex items-center gap-2">
+        <div
+          className="pointer-events-auto absolute top-0 left-3 flex items-center gap-2"
+          data-menu-obstacle=""
+        >
           {toolbarLeft}
         </div>
       )}
       {toolbarRight && scene && (
         <div
           className="pointer-events-auto absolute top-0 flex items-center gap-2"
+          data-menu-obstacle=""
           style={{ right: `calc(${(1 - scene.right) * 100}% + 12px)` }}
         >
           {toolbarRight}
