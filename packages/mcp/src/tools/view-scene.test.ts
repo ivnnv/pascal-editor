@@ -3,7 +3,11 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { refuse } from '@pascal-app/core/agent-tools'
-import { WallNode } from '@pascal-app/core/schema'
+import { type AnyNode, type AnyNodeId, WallNode } from '@pascal-app/core/schema'
+import {
+  VIEW_SCENE_CASES,
+  viewSceneCaseProblems,
+} from '../../../core/src/agent-operations/__fixtures__/view-scene-cases'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createTestSceneOperations } from './scene-lifecycle/test-utils'
 import { registerViewScene, type SceneViewHost } from './view-scene'
@@ -14,11 +18,16 @@ import { registerViewScene, type SceneViewHost } from './view-scene'
 
 type Content = { type: string; text?: string; data?: string; mimeType?: string }
 
-async function viewWith(host: SceneViewHost | undefined, { project = true } = {}) {
+async function viewWith(
+  host: SceneViewHost | undefined,
+  { project = true, at }: { project?: boolean; at?: [number, number, number] } = {},
+) {
   const bridge = new SceneBridge()
   bridge.setScene({}, [])
   bridge.loadDefault()
   const level = Object.values(bridge.getNodes()).find((node) => node.type === 'level')!
+  const building = Object.values(bridge.getNodes()).find((node) => node.type === 'building')!
+  if (at) bridge.updateNode(building.id, { position: at })
   for (const [start, end] of [
     [
       [0, 0],
@@ -46,6 +55,7 @@ async function viewWith(host: SceneViewHost | undefined, { project = true } = {}
   const client = new Client({ name: 'view', version: '1' })
   await Promise.all([server.connect(a), client.connect(b)])
   return {
+    levelId: level.id,
     call: async (args: Record<string, unknown>) => {
       const result = await client.callTool({ name: 'view_scene', arguments: args })
       return { isError: !!result.isError, content: result.content as Content[] }
@@ -80,7 +90,7 @@ describe('view_scene over the MCP', () => {
       const { isError, content } = await view.call({ from: 'south', eyeHeight: 1.7 })
       expect(isError).toBe(false)
       expect(asked).toMatchObject([
-        { projectId: 'project_a', pose: { projection: 'perspective' }, size: { w: 1280, h: 800 } },
+        { projectId: 'project_a', pose: { projection: 'perspective' }, size: { w: 1920, h: 1200 } },
       ])
       expect((asked[0] as { pose: { position: number[] } }).pose.position[1]).toBe(1.7)
       expect(content.find((part) => part.type === 'image')).toEqual({
@@ -90,11 +100,70 @@ describe('view_scene over the MCP', () => {
       })
       expect(json(content)).toMatchObject({
         status: 'viewed',
-        size: { width: 1280, height: 800 },
+        size: { width: 1920, height: 1200 },
         tab: 'tab_1',
         capturedAt: '2026-10-05T15:30:00.000Z',
       })
       expect(String(json(content).note)).toContain('not a measure')
+    } finally {
+      await view.close()
+    }
+  })
+
+  test('a look inside a floor reaches the editor tab as the floor to cut', async () => {
+    const asked: Parameters<SceneViewHost['capture']>[0][] = []
+    const view = await viewWith({
+      capture: async (request) => {
+        asked.push(request)
+        return {
+          image: new Uint8Array([1]),
+          mimeType: 'image/webp',
+          width: request.size.w,
+          height: request.size.h,
+          tab: 'tab_1',
+          capturedAt: '2026-10-12T09:00:00.000Z',
+        }
+      },
+    })
+    try {
+      expect((await view.call({ interior: { levelId: view.levelId } })).isError).toBe(false)
+      expect(asked).toMatchObject([{ interior: { levelId: view.levelId } }])
+      expect(asked[0]!.pose.position[1]).toBeGreaterThan(asked[0]!.pose.target[1])
+      expect((await view.call({ from: 'south' })).isError).toBe(false)
+      expect(asked[1]).not.toHaveProperty('interior')
+      const wrong = await view.call({ interior: { levelId: 'level_missing' } })
+      expect(wrong.isError).toBe(true)
+      expect(json(wrong.content)).toMatchObject({ code: 'interior_level_invalid' })
+      expect(asked).toHaveLength(2)
+    } finally {
+      await view.close()
+    }
+  })
+
+  // A building standing away from the site's origin was looked for at the origin.
+  test('a building away from the origin is looked at where it stands', async () => {
+    const asked: Parameters<SceneViewHost['capture']>[0][] = []
+    const view = await viewWith(
+      {
+        capture: async (request) => {
+          asked.push(request)
+          return {
+            image: new Uint8Array([1]),
+            mimeType: 'image/webp',
+            width: request.size.w,
+            height: request.size.h,
+            tab: 'tab_1',
+            capturedAt: '2026-10-12T09:00:00.000Z',
+          }
+        },
+      },
+      { at: [5.7, 0, 16.5] },
+    )
+    try {
+      expect((await view.call({ target: view.levelId })).isError).toBe(false)
+      // Walls from (0, 0) to (12, 0) and (12, 8): centre (6, 4) in the building's frame.
+      const [x, , z] = asked[0]!.pose.target
+      expect([Math.round(x * 100) / 100, Math.round(z * 100) / 100]).toEqual([11.7, 20.5])
     } finally {
       await view.close()
     }
@@ -118,7 +187,7 @@ describe('view_scene over the MCP', () => {
     try {
       const camera = { position: [6, 1.6, 20], target: [6, 2, 4], fov: 50, aspect: 1.5, shift: 0 }
       expect((await view.call({ camera })).isError).toBe(false)
-      expect(sizes).toEqual([{ w: 1280, h: 853 }])
+      expect(sizes).toEqual([{ w: 1920, h: 1280 }])
     } finally {
       await view.close()
     }
@@ -202,4 +271,64 @@ describe('view_scene over the MCP', () => {
       await unbound.close()
     }
   })
+})
+
+// The case table of view_scene (core's __fixtures__/view-scene-cases.ts), over the MCP: what the
+// editor tab is asked to render, or the refusal.
+describe('the case table, over the MCP', () => {
+  for (const c of VIEW_SCENE_CASES) {
+    if (c.surfaces && !c.surfaces.includes('mcp')) continue
+    test(c.name, async () => {
+      const nodes = c.scene()
+      const bridge = new SceneBridge()
+      bridge.setScene(
+        nodes as Record<AnyNodeId, AnyNode>,
+        Object.values(nodes)
+          .filter((node) => !node.parentId)
+          .map((node) => node.id as AnyNodeId),
+      )
+      const { operations } = createTestSceneOperations({ bridge })
+      operations.setActiveScene({
+        id: 'scene_a',
+        name: 'Cases',
+        projectId: 'project_a',
+        ownerId: null,
+        thumbnailUrl: null,
+        version: 1,
+      })
+      const asked: Parameters<SceneViewHost['capture']>[0][] = []
+      const server = new McpServer({ name: 'view', version: '1' })
+      registerViewScene(server, operations, {
+        capture: async (request) => {
+          asked.push(request)
+          return {
+            image: new Uint8Array([1]),
+            mimeType: 'image/webp',
+            width: request.size.w,
+            height: request.size.h,
+            tab: 'tab_1',
+            capturedAt: '2026-10-14T00:00:00.000Z',
+          }
+        },
+      })
+      const [a, b] = InMemoryTransport.createLinkedPair()
+      const client = new Client({ name: 'view', version: '1' })
+      await Promise.all([server.connect(a), client.connect(b)])
+      try {
+        const result = await client.callTool({ name: 'view_scene', arguments: c.input })
+        const content = result.content as Content[]
+        if ('refusal' in c.expect) {
+          expect(json(content)).toMatchObject({ code: c.expect.refusal })
+          expect(asked).toEqual([])
+        } else {
+          expect(result.isError ?? false).toBe(false)
+          expect(asked).toHaveLength(1)
+          expect(viewSceneCaseProblems(c, asked[0]!)).toEqual([])
+        }
+      } finally {
+        await client.close()
+        await server.close()
+      }
+    })
+  }
 })
