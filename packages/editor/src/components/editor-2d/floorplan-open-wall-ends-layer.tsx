@@ -174,7 +174,7 @@ function OpenWallEndMarker({
         onPointerEnter={interactive ? onHoverStart : undefined}
         onPointerLeave={interactive ? onHoverEnd : undefined}
         onPointerUp={stop}
-        pointerEvents={interactive ? 'all' : 'none'}
+        pointerEvents={interactive ? 'fill' : 'none'}
         r={11 * upp}
         role="button"
         style={{ cursor: 'pointer' }}
