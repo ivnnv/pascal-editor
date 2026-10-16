@@ -127,7 +127,7 @@ export function ViewTabs({ pane, className }: { pane: ViewPaneIndex; className?:
 }
 
 /** Split toggle and, split, the swap — at the right end of the last pane's bar. */
-function SplitControls() {
+export function SplitControls() {
   const split = useActiveViewLayout().split
   return (
     <div className={GROUP}>

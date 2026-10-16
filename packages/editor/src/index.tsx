@@ -88,6 +88,7 @@ export {
   ThumbnailGenerator,
 } from './components/editor/thumbnail-generator'
 export { PLUGINS_VIEW_ID } from './components/editor/views/use-editor-views'
+export { SplitControls, useSplitShortcut, ViewTabs } from './components/editor/views/view-bar'
 export { WallMoveSideHandles } from './components/editor/wall-move-side-handles'
 export { useFloorplanRender } from './components/editor-2d/floorplan-render-context'
 export { FloorplanDimensionRenderer } from './components/editor-2d/renderers/floorplan-dimension-renderer'
