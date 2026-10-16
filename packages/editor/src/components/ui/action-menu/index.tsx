@@ -3,6 +3,7 @@
 import { useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { motion } from 'motion/react'
+import { useRef } from 'react'
 import { TooltipProvider } from './../../../components/ui/primitives/tooltip'
 import { useIsMobile } from './../../../hooks/use-mobile'
 import { useReducedMotion } from './../../../hooks/use-reduced-motion'
@@ -13,6 +14,8 @@ import { CameraActions } from './camera-actions'
 import { ControlModes } from './control-modes'
 import { FollowPascalPill } from './follow-pascal-pill'
 import { type ActionMenuPlacement, ActionMenuPlacementProvider } from './placement'
+import { PlacementControl } from './placement-control'
+import { useTopDockShift } from './top-dock-fit'
 import { SecondaryToggles } from './view-toggles'
 
 // Mobile bottom offset matches the viewer's overlap behind the sheet's
@@ -39,6 +42,8 @@ export function ActionMenu({
     (s) => isMobile && CONTEXTUAL_TABS.has(s.activeSidebarPanel),
   )
   const reducedMotion = useReducedMotion()
+  const menuRef = useRef<HTMLDivElement>(null)
+  const topDockShift = useTopDockShift(menuRef, placement === 'top' && !isMobile)
 
   // On mobile, defer the bottom rail to the selection bar when something
   // is selected — the contextual actions take priority over mode controls.
@@ -60,6 +65,7 @@ export function ActionMenu({
 
   // Mobile keeps the bottom rail: the sheet owns the rest of the screen.
   const effectivePlacement = isMobile ? 'bottom' : placement
+  const vertical = effectivePlacement === 'left' || effectivePlacement === 'right'
 
   return (
     <ActionMenuPlacementProvider value={effectivePlacement}>
@@ -72,15 +78,26 @@ export function ActionMenu({
               ? 'absolute left-1/2 origin-bottom -translate-x-1/2 scale-90'
               : inline
                 ? 'relative'
-                : effectivePlacement === 'top'
-                  ? 'fixed top-3 left-1/2 -translate-x-1/2'
-                  : 'fixed bottom-6 left-1/2 -translate-x-1/2',
+                : // Rails centre in a band that keeps the corner chrome clear, scrolling when it is short.
+                  effectivePlacement === 'left'
+                  ? 'no-scrollbar fixed top-24 bottom-16 left-4 my-auto h-fit max-h-[calc(100%-10rem)] overflow-y-auto'
+                  : effectivePlacement === 'right'
+                    ? 'no-scrollbar fixed top-24 bottom-16 right-4 my-auto h-fit max-h-[calc(100%-10rem)] overflow-y-auto'
+                  : effectivePlacement === 'top'
+                    ? 'fixed top-3 left-1/2 -translate-x-1/2'
+                    : 'fixed bottom-6 left-1/2 -translate-x-1/2',
             'rounded-2xl border border-border bg-background/90 shadow-2xl backdrop-blur-md',
             'transition-colors duration-200 ease-out',
             className,
           )}
+          data-action-menu=""
           layout
-          style={isMobile ? { bottom: MOBILE_BOTTOM_OFFSET } : undefined}
+          ref={menuRef}
+          style={
+            isMobile
+              ? { bottom: MOBILE_BOTTOM_OFFSET }
+              : { x: topDockShift.x, y: topDockShift.y }
+          }
           transition={transition}
         >
           {isMobile ? (
@@ -95,12 +112,19 @@ export function ActionMenu({
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-center gap-1 px-2 py-1.5">
+            <div
+              className={cn(
+                'flex items-center justify-center gap-1',
+                vertical ? 'flex-col px-1.5 py-2' : 'px-2 py-1.5',
+              )}
+            >
               <ControlModes />
-              <div className="mx-1 h-5 w-px bg-border" />
+              <div className={vertical ? 'my-1 h-px w-5 bg-border' : 'mx-1 h-5 w-px bg-border'} />
               <SecondaryToggles />
-              <div className="mx-1 h-5 w-px bg-border" />
+              <div className={vertical ? 'my-1 h-px w-5 bg-border' : 'mx-1 h-5 w-px bg-border'} />
               <CameraActions />
+              <div className={vertical ? 'my-1 h-px w-5 bg-border' : 'mx-1 h-5 w-px bg-border'} />
+              <PlacementControl />
             </div>
           )}
         </motion.div>

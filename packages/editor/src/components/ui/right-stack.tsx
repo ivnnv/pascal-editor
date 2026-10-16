@@ -63,6 +63,7 @@ export function RightStack({
   helper,
   reserveBottomMenu = true,
   belowTopMenu = false,
+  besideRightMenu = false,
 }: {
   inspector: ReactNode
   helper: ReactNode
@@ -70,6 +71,8 @@ export function RightStack({
   reserveBottomMenu?: boolean
   // Start below an action menu docked at the top of the stage.
   belowTopMenu?: boolean
+  // Step inwards from an action menu docked to the right edge.
+  besideRightMenu?: boolean
 }) {
   const isMobile = useIsMobile()
   const stackRef = useRef<HTMLDivElement>(null)
@@ -140,7 +143,8 @@ export function RightStack({
     <RightStackContext.Provider value={true}>
       <div
         className={cn(
-          'pointer-events-none fixed right-4 z-40 flex flex-col items-end gap-2',
+          'pointer-events-none fixed z-40 flex flex-col items-end gap-2',
+          besideRightMenu ? 'right-[5.5rem]' : 'right-4',
           reserveBottomMenu ? 'bottom-[74px]' : 'bottom-4',
           !belowTopMenu && 'top-20',
         )}
@@ -148,7 +152,11 @@ export function RightStack({
         data-right-stack
         ref={stackRef}
       >
-        <div className="flex min-h-0 flex-[0_1_auto] flex-col items-end" ref={inspectorRef}>
+        <div
+          className="flex min-h-0 flex-[0_1_auto] flex-col items-end"
+          data-menu-obstacle=""
+          ref={inspectorRef}
+        >
           {inspector}
         </div>
         <div
