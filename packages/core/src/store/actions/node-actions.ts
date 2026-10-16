@@ -79,11 +79,13 @@ type WallMergePlan = {
 }
 
 const DEFAULT_RIDGE_VENT_REFRESH_FIELDS = new Set<string>([
+  'roofSystem',
   'roofType',
   'width',
   'depth',
   'pitch',
   'overhang',
+  'gableOverhang',
   'wallThickness',
   'shingleThickness',
   'gambrelLowerWidthRatio',
@@ -103,6 +105,8 @@ const DEFAULT_GUTTER_REFRESH_FIELDS = new Set<string>([
   'wallHeight',
   'pitch',
   'overhang',
+  'gableOverhang',
+  'wallThickness',
   'trim',
 ])
 
@@ -1067,6 +1071,11 @@ function refreshDefaultGuttersForRoofIds(
 // Track pending RAF for updateNodesAction to prevent multiple queued callbacks
 let pendingRafId: number | null = null
 let pendingUpdates: Set<AnyNodeId> = new Set()
+
+/** Authored updates whose deferred dirty intent has not reached render systems yet. */
+export function getPendingNodeUpdateCount(): number {
+  return pendingUpdates.size
+}
 
 function buildWallMergePlans(
   nodes: Record<AnyNodeId, AnyNode>,
