@@ -1,14 +1,26 @@
 'use client'
 
 import { type AnyNodeId, emitter, type OpenWallEnd } from '@pascal-app/core'
+import { X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { dismissOpenWallEnds } from '../../hooks/use-open-wall-ends'
 import { openWallEndsSummary } from '../../lib/floorplan/open-wall-ends'
 import { MEASUREMENT_DANGLING_COLOR } from '../../lib/measurements'
 
-// The viewer area holds the floor plan and the 3D view side by side, so its
-// top centre clears both views' corner controls in 2D, 3D and split alike.
+// The viewer area holds the floor plan and the 3D view side by side; the hint
+// sits at its top centre, one row down so it clears the views' top toolbars.
 const viewerArea = () => document.querySelector('[data-pascal-viewer-3d]')?.parentElement ?? null
+const TOOLBAR_CLEARANCE = 60
+const HINT_HEIGHT = 34
+
+/** Pushes the hint below an action menu docked across the same spot. */
+function belowActionMenu(left: number, top: number): number {
+  const menu = document.querySelector('[data-action-menu]')?.getBoundingClientRect()
+  if (!menu || menu.left > left || menu.right < left) return top
+  if (menu.bottom < top || menu.top > top + HINT_HEIGHT) return top
+  return menu.bottom + 8
+}
 
 // The views slide in and out without resizing, so the anchor's box is read
 // per frame while the hint is up, like the Join pill's anchor.
@@ -19,8 +31,11 @@ function useViewerAreaTopCenter(): { left: number; top: number } | null {
     const tick = () => {
       raf = requestAnimationFrame(tick)
       const rect = viewerArea()?.getBoundingClientRect()
+      const left = rect ? rect.left + rect.width / 2 : 0
       const next =
-        rect && rect.width > 0 ? { left: rect.left + rect.width / 2, top: rect.top } : null
+        rect && rect.width > 0
+          ? { left, top: belowActionMenu(left, rect.top + TOOLBAR_CLEARANCE) }
+          : null
       setAnchor((current) =>
         current && next && current.left === next.left && current.top === next.top ? current : next,
       )
@@ -65,7 +80,7 @@ export function OpenWallEndsHint({
       data-open-wall-end=""
       onPointerDown={(event) => event.stopPropagation()}
       onPointerUp={(event) => event.stopPropagation()}
-      style={{ left: anchor.left, top: anchor.top + 16 }}
+      style={{ left: anchor.left, top: anchor.top }}
     >
       <span
         aria-hidden
@@ -82,6 +97,17 @@ export function OpenWallEndsHint({
         type="button"
       >
         Show
+      </button>
+      <button
+        aria-label="Dismiss"
+        className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        onClick={(event) => {
+          event.stopPropagation()
+          dismissOpenWallEnds(ends)
+        }}
+        type="button"
+      >
+        <X aria-hidden className="h-3.5 w-3.5" />
       </button>
     </div>,
     document.body,
