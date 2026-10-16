@@ -762,6 +762,15 @@ describe('planJoinOpenWallEnd', () => {
     expect(nodes.wall_a).toMatchObject({ end: [2, 0] })
   })
 
+  test('a free-standing wall never reports its own open ends', () => {
+    const host = wall('wall_host', [0, 0], [4, 0])
+    const stub = wall('wall_stub', [2, 2], [2, 0.2])
+    const flagged = (nodes: Record<string, AnyNode>) =>
+      findOpenWallEnds(nodes, LEVEL_ID).filter((entry) => entry.wallId === 'wall_stub')
+    expect(flagged(nodeMap([host, stub]))).not.toEqual([])
+    expect(flagged(nodeMap([host, { ...stub, freeStanding: true }]))).toEqual([])
+  })
+
   test('the scene write commits a T repair, hosted opening and derived room as one undo step', () => {
     const host = wall('wall_host', [0, 0], [4, 0])
     const source = wall('wall_source', [2, 0.2], [2, 3])

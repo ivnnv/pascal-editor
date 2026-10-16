@@ -1001,7 +1001,11 @@ export function findOpenWallEnds(
   nodes: Readonly<Record<string, AnyNode>>,
   levelId: string,
 ): OpenWallEnd[] {
-  return detectOpenWallEnds(nodes, levelId).map((end) => {
+  const ends = detectOpenWallEnds(nodes, levelId).filter((end) => {
+    const wall = nodes[end.wallId]
+    return !(wall?.type === 'wall' && wall.freeStanding)
+  })
+  return ends.map((end) => {
     if (!end.candidate) return end
     const result = planJoinOpenWallEnd(nodes, end)
     if (!result.ok) return end
