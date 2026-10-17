@@ -142,7 +142,6 @@ import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-st
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useDrawingView from '../../store/use-drawing-view'
 import type { GuideUiState, NavigationSyncPose } from '../../store/use-editor'
-import useFloorplanPreferences from '../../store/use-floorplan-preferences'
 import useEditor, {
   isAngleSnapActive,
   isMagneticSnapActive,
@@ -150,6 +149,7 @@ import useEditor, {
 } from '../../store/use-editor'
 import { useFloorplanDraftPreview } from '../../store/use-floorplan-draft-preview'
 import { useFloorplanMarquee } from '../../store/use-floorplan-marquee'
+import useFloorplanPreferences from '../../store/use-floorplan-preferences'
 import useInteractionScope, {
   useActiveHandleDrag,
   useEndpointReshape,
@@ -7429,11 +7429,15 @@ export function FloorplanPanel({
     publishFloorplanNavigationPose(localCenter, nextUserRotationDeg, currentViewport.width)
   }, [buildingRotationDeg, publishFloorplanNavigationPose, smoothFloorplanNavigationView])
 
-  // The first time the plan shows, turn it north-up when the user asked for that.
-  const startOrientationAppliedRef = useRef(false)
+  // Each time the plan comes into view, turn it north-up when the user asked for that.
+  const northUpAppliedRef = useRef(false)
   useEffect(() => {
-    if (startOrientationAppliedRef.current || !isFloorplanOpen || !viewport) return
-    startOrientationAppliedRef.current = true
+    if (!isFloorplanOpen) {
+      northUpAppliedRef.current = false
+      return
+    }
+    if (northUpAppliedRef.current || !viewport) return
+    northUpAppliedRef.current = true
     if (useFloorplanPreferences.getState().startNorthUp) alignFloorplanViewToNorth()
   }, [alignFloorplanViewToNorth, isFloorplanOpen, viewport])
 
