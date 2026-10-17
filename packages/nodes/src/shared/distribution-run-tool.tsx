@@ -16,6 +16,7 @@ import {
   triggerSFX,
   useEditor,
   useInteractionScope,
+  useSnappingHold,
 } from '@pascal-app/editor'
 import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
@@ -1131,6 +1132,8 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       }
       refreshCursorRef.current()
     })
+    // Holding or letting go of Shift switches snapping as much as the mode does.
+    const unsubscribeHold = useSnappingHold.subscribe(() => refreshCursorRef.current())
     emitter.on('grid:click', onClick)
     emitter.on('grid:move', onMove)
     emitter.on('tool:cancel', onCancel)
@@ -1138,6 +1141,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
     window.addEventListener('keyup', onKeyUp)
     return () => {
       unsubscribeSnapping()
+      unsubscribeHold()
       emitter.off('grid:click', onClick)
       emitter.off('grid:move', onMove)
       emitter.off('tool:cancel', onCancel)
