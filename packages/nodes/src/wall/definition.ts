@@ -113,6 +113,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     'pascal:editor/floorplan': {
       tool: () => import('./floorplan-tool'),
       reshapeLayers: { split: () => import('./split-floorplan-layer') },
+      selectionLayer: () => import('./joined-walls-layer'),
       contextualDimensions: buildWallContextualDimensions,
       actionMenu: {
         actions: () => import('./actions'),
