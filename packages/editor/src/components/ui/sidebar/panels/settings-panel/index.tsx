@@ -77,6 +77,7 @@ import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-sel
 import { bringBuildArtifacts } from './../../../../../lib/scene-clipboard'
 import useEditor, { selectDefaultBuildingAndLevel } from './../../../../../store/use-editor'
 import useFloorplanMode from './../../../../../store/use-floorplan-mode'
+import useFloorplanPreferences from './../../../../../store/use-floorplan-preferences'
 import { type SendToAppStep, useSendToApp } from './../../../../../store/use-send-to-app'
 import { AudioSettingsDialog } from './audio-settings-dialog'
 import { ConstructionAnimationSetting } from './construction-animation-setting'
@@ -522,6 +523,7 @@ export function SettingsPanel({
   const resetSelection = useViewer((state) => state.resetSelection)
   const modelExport = useEditor((state) => state.modelExport)
   const shadows = useViewer((state) => state.shadows)
+  const startNorthUp = useFloorplanPreferences((state) => state.startNorthUp)
   const setPhase = useEditor((state) => state.setPhase)
   const floorplanMode = useFloorplanMode((state) => state.mode)
   const registryVersion = useRegistryVersion()
@@ -974,6 +976,12 @@ export function SettingsPanel({
             description="Cast shadows from lights."
             label="Shadows"
             onCheckedChange={(checked) => useViewer.getState().setShadows(checked)}
+          />
+          <SettingsSwitchRow
+            checked={startNorthUp}
+            description="Open the 2D plan facing north instead of at 45°."
+            label="Start 2D north-up"
+            onCheckedChange={(checked) => useFloorplanPreferences.getState().setStartNorthUp(checked)}
           />
         </SettingsSection>
 

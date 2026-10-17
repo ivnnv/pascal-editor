@@ -157,6 +157,7 @@ import useEditor, {
 } from '../../store/use-editor'
 import { useFloorplanDraftPreview } from '../../store/use-floorplan-draft-preview'
 import { useFloorplanMarquee } from '../../store/use-floorplan-marquee'
+import useFloorplanPreferences from '../../store/use-floorplan-preferences'
 import useInteractionScope, {
   useActiveHandleDrag,
   useEndpointReshape,
@@ -7342,6 +7343,18 @@ export function FloorplanPanel({
     smoothFloorplanNavigationView(localCenter, nextUserRotationDeg, currentViewport.width)
     publishFloorplanNavigationPose(localCenter, nextUserRotationDeg, currentViewport.width)
   }, [buildingRotationDeg, publishFloorplanNavigationPose, smoothFloorplanNavigationView])
+
+  // Each time the plan comes into view, turn it north-up when the user asked for that.
+  const northUpAppliedRef = useRef(false)
+  useEffect(() => {
+    if (!isFloorplanOpen) {
+      northUpAppliedRef.current = false
+      return
+    }
+    if (northUpAppliedRef.current || !viewport) return
+    northUpAppliedRef.current = true
+    if (useFloorplanPreferences.getState().startNorthUp) alignFloorplanViewToNorth()
+  }, [alignFloorplanViewToNorth, isFloorplanOpen, viewport])
 
   const clearGuideInteraction = useCallback(() => {
     guideInteractionRef.current = null
