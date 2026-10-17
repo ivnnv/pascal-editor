@@ -151,7 +151,6 @@ import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-st
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useDrawingView from '../../store/use-drawing-view'
 import type { GuideUiState, NavigationSyncPose } from '../../store/use-editor'
-import useFloorplanPreferences from '../../store/use-floorplan-preferences'
 import useEditor, {
   isAngleSnapActive,
   isMagneticSnapActive,
@@ -159,6 +158,7 @@ import useEditor, {
 } from '../../store/use-editor'
 import { useFloorplanDraftPreview } from '../../store/use-floorplan-draft-preview'
 import { useFloorplanMarquee } from '../../store/use-floorplan-marquee'
+import useFloorplanPreferences from '../../store/use-floorplan-preferences'
 import useInteractionScope, {
   useActiveHandleDrag,
   useEndpointReshape,
