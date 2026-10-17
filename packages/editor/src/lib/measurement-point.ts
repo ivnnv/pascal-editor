@@ -36,9 +36,9 @@ export type ResolvedMeasurePoint = MeasureBinding & {
 const BOUND_EPSILON = 1e-4
 
 /**
- * Binds the snapped point to a feature and places the marker on the result. A
- * binding may pull a free point onto its feature, but never off an axis lock or
- * an exact snap; there it only describes a feature the point already lies on.
+ * Binds the snapped point to a feature and places the marker on it. A binding only
+ * describes a feature the point already lies on: it never moves the point, so the
+ * measure lands exactly where the snap or the pointer put it.
  */
 export function finalizeMeasurePoint(
   raw: RawMeasurePoint,
@@ -48,11 +48,8 @@ export function finalizeMeasurePoint(
     maxDistance?: number,
   ) => MeasureBinding,
 ): ResolvedMeasurePoint {
-  let binding = bind(raw.point, raw.targetNodeId)
-  if ((raw.guide?.snapped || raw.exact) && distance(binding.point, raw.point) > BOUND_EPSILON) {
-    binding = bind(raw.point, raw.targetNodeId, BOUND_EPSILON)
-    if (distance(binding.point, raw.point) > BOUND_EPSILON) binding = { point: raw.point }
-  }
+  let binding = bind(raw.point, raw.targetNodeId, BOUND_EPSILON)
+  if (distance(binding.point, raw.point) > BOUND_EPSILON) binding = { point: raw.point }
   const point = binding.point
   return {
     ...binding,

@@ -12,7 +12,7 @@ const faceBinding = (point: MeasurementPoint, _target: string | null, maxDistanc
     : { point }
 
 describe('one resolved measure point', () => {
-  test('the marker sits on the point the binding settles, not the pre-binding one', () => {
+  test('a binding never pulls a free point onto a nearby face', () => {
     const resolved = finalizeMeasurePoint(
       {
         point: [1.3, 0, -2],
@@ -23,8 +23,17 @@ describe('one resolved measure point', () => {
       },
       faceBinding,
     )
+    expect(resolved.point).toEqual([1.3, 0, -2])
+    expect(resolved.marker).toMatchObject({ x: 1.3, z: -2, kind: 'wall' })
+  })
+
+  test('a point already on the face binds to it', () => {
+    const resolved = finalizeMeasurePoint(
+      { point: [1.253, 0, -2], guide: null, targetNodeId: 'wall_a' },
+      faceBinding,
+    )
     expect(resolved.point).toEqual([1.253, 0, -2])
-    expect(resolved.marker).toMatchObject({ x: 1.253, z: -2, kind: 'wall' })
+    expect(resolved.semantic).toBeDefined()
   })
 
   test('a binding never drags a point off its axis lock', () => {

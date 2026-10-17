@@ -43,6 +43,9 @@ function semanticWallAnchor(
   })
   const closest = matches.sort((a, b) => a.match.distance - b.match.distance)[0]
   if (!closest) return { point }
+  // A feature that would move the point (its segment ends short of it) does not bind it.
+  const [x, , z] = closest.match.point
+  if (Math.hypot(x - point[0], z - point[2]) > maxDistance) return { point }
   return {
     anchor: {
       kind: 'feature',
