@@ -6556,7 +6556,8 @@ export function FloorplanPanel({
         return
       }
 
-      if (pose.source === '3d') {
+      // A hidden 3D camera is not being driven by anyone, so it does not turn the plan.
+      if (pose.source === '3d' && isViewVisible(useEditor.getState(), VIEW_3D)) {
         syncFloorplanViewportToNavigationPose(pose)
       }
     },
