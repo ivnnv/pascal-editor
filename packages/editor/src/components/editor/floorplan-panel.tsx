@@ -95,6 +95,7 @@ import {
   type FloorplanNodeTransform as SharedFloorplanNodeTransform,
   worldToFloorplanLocalPoint,
 } from '../../lib/floorplan'
+import { findClosestWallPoint } from '../../lib/floorplan/closest-wall-point'
 import { buildFloorplanContext } from '../../lib/floorplan/floorplan-readonly'
 // Site-plan view. Owned under `lib/floorplan/site-plan/**`; this panel
 // only chooses between it and the registry layer, and mounts the switch.
@@ -2763,59 +2764,6 @@ function getRotatedViewBoxBounds(
   }
 
   return { minX, maxX, minY, maxY }
-}
-
-function findClosestWallPoint(
-  point: WallPlanPoint,
-  walls: WallNode[],
-  options?: {
-    maxDistance?: number
-    canUseWall?: (wall: WallNode) => boolean
-  },
-): {
-  wall: WallNode
-  point: WallPlanPoint
-  t: number
-  normal: [number, number, number]
-} | null {
-  const maxDistance = options?.maxDistance ?? 0.5
-  const canUseWall = options?.canUseWall
-
-  let best: {
-    wall: WallNode
-    point: WallPlanPoint
-    t: number
-    normal: [number, number, number]
-  } | null = null
-  let bestDistSq = maxDistance * maxDistance
-
-  for (const wall of walls) {
-    if (canUseWall && !canUseWall(wall)) {
-      continue
-    }
-
-    const [x1, z1] = wall.start
-    const [x2, z2] = wall.end
-    const dx = x2 - x1
-    const dz = z2 - z1
-    const lengthSq = dx * dx + dz * dz
-    if (lengthSq < 1e-9) continue
-
-    let t = ((point[0] - x1) * dx + (point[1] - z1) * dz) / lengthSq
-    t = Math.max(0, Math.min(1, t))
-
-    const px = x1 + t * dx
-    const pz = z1 + t * dz
-
-    const distSq = (point[0] - px) ** 2 + (point[1] - pz) ** 2
-    if (distSq < bestDistSq) {
-      bestDistSq = distSq
-      // Provide an arbitrary front-facing normal so the tool knows it's a valid wall side
-      best = { wall, point: [px, pz], t, normal: [0, 0, 1] }
-    }
-  }
-
-  return best
 }
 
 type GuideImageDimensions = {
@@ -8937,6 +8885,23 @@ export function FloorplanPanel({
   )
 
   const hoveredWallIdRef = useRef<string | null>(null)
+  // A later placement starts from the nearest wall, not the one the last one held.
+  useEffect(() => {
+    if (!isOpeningBuildActive) hoveredWallIdRef.current = null
+  }, [isOpeningBuildActive])
+  // A click commits on the wall the hover drew the opening on.
+  const findOpeningWallPoint = useCallback(
+    (
+      point: WallPlanPoint,
+      candidateWalls: WallNode[],
+      options?: { canUseWall?: (wall: WallNode) => boolean },
+    ) =>
+      findClosestWallPoint(point, candidateWalls, {
+        ...options,
+        stickyWallId: hoveredWallIdRef.current,
+      }),
+    [],
+  )
   const hoveredCeilingIdRef = useRef<string | null>(null)
   const emitFloorplanWallLeave = useCallback((wallId: string | null) => {
     if (!wallId) {
@@ -9409,6 +9374,7 @@ export function FloorplanPanel({
       if (isOpeningBuildActive && !isOpeningMoveActive) {
         const closest = findClosestWallPoint(planPoint, walls, {
           canUseWall: (wall) => !isCurvedWall(wall),
+          stickyWallId: hoveredWallIdRef.current,
         })
         if (closest) {
           const dx = closest.wall.end[0] - closest.wall.start[0]
@@ -9933,7 +9899,7 @@ export function FloorplanPanel({
     emitFloorplanGridEvent,
     fenceDraftStart,
     fences,
-    findClosestWallPoint,
+    findClosestWallPoint: findOpeningWallPoint,
     floorplanOpeningLocalY,
     getSnappedFloorplanPoint,
     handleCeilingItemPlacementClick,
