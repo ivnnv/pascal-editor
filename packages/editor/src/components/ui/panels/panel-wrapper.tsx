@@ -39,6 +39,7 @@ import { useInspectorExpanded, useInspectorHeight } from '../../../lib/inspector
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
 import { ErrorBoundary } from '../primitives/error-boundary'
+import { ScrollArea } from '../primitives/scroll-area'
 import { useInRightStack } from '../right-stack'
 import { CollectionsPopover } from './collections/collections-popover'
 
@@ -382,7 +383,11 @@ export function PanelWrapper({
           controls (`children`). A stale extension id falls back to regular
           via `resolveActiveExtension`. */}
       {!(collapsed && !isMobile) && (
-        <div className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto" data-panel-scroll>
+        <ScrollArea
+          className="flex-1"
+          contentClassName="flex flex-col"
+          viewportProps={{ 'data-panel-scroll': true }}
+        >
           {!isMobile && selectedId && activeExtension ? (
             <InspectorExtensionSection
               extension={activeExtension}
@@ -422,7 +427,7 @@ export function PanelWrapper({
                 ))}
             </>
           )}
-        </div>
+        </ScrollArea>
       )}
 
       {resolvedFooter && !(collapsed && !isMobile) && (

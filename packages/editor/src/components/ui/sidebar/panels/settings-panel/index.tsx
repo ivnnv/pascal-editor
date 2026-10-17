@@ -62,6 +62,7 @@ import {
 } from '../../../../../lib/send-to-app'
 import { SegmentedControl } from './../../../../../components/ui/controls/segmented-control'
 import { Button } from './../../../../../components/ui/primitives/button'
+import { ScrollArea } from './../../../../../components/ui/primitives/scroll-area'
 import {
   Dialog,
   DialogContent,
@@ -897,11 +898,9 @@ export function SettingsPanel({
   }
 
   return (
-    <div
-      className={cn(
-        'subtle-scrollbar @container min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-3',
-        className,
-      )}
+    <ScrollArea
+      className={cn('flex-1', className)}
+      contentClassName="@container overscroll-contain p-3"
     >
       <div className="divide-y divide-border/60">
         <section className="space-y-3 py-5 first:pt-0 last:pb-0">
@@ -1341,6 +1340,6 @@ export function SettingsPanel({
           </div>
         </SettingsSection>
       </div>
-    </div>
+    </ScrollArea>
   )
 }

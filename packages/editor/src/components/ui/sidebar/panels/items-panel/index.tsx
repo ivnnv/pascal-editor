@@ -11,6 +11,7 @@ import { furnishTools } from '../../../action-menu/furnish-tools'
 import { CATALOG_ITEMS } from '../../../item-catalog/catalog-items'
 import { ItemCatalog } from '../../../item-catalog/item-catalog'
 import { type FunctionTreeNode, FunctionTreePanel } from './function-tree-panel'
+import { ScrollArea } from '../../../primitives/scroll-area'
 
 const PLACEMENT_TAGS = new Set(['floor', 'wall', 'ceiling', 'countertop'])
 
@@ -368,7 +369,7 @@ function LegacyItemsPanel({
       </div>
 
       {/* Item grid */}
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <ScrollArea className="flex-1" contentClassName="p-3">
         {isSearchPending ? (
           <div className="flex h-full items-center justify-center">
             <div className="size-5 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-muted-foreground" />
@@ -398,7 +399,7 @@ function LegacyItemsPanel({
             search={isServerSearch ? '' : search}
           />
         )}
-      </div>
+      </ScrollArea>
     </div>
   )
 }

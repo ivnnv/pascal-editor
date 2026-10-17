@@ -76,6 +76,7 @@ import { createUnitInBuilding, toggleZoneMembership } from './../../../../../lib
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
+import { ScrollArea } from '../../../primitives/scroll-area'
 import { MetricControl } from '../../../controls/metric-control'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
 import { CollectionsSection } from './collection-tree-node'
@@ -1111,7 +1112,7 @@ const UnitsSection = memo(function UnitsSection({
   }
 
   return (
-    <div className="subtle-scrollbar max-h-72 shrink-0 overflow-y-auto overflow-x-hidden">
+    <ScrollArea className="max-h-72 shrink-0">
       <TreeNodeWrapper
         actions={
           <button
@@ -1150,7 +1151,7 @@ const UnitsSection = memo(function UnitsSection({
           onToggle={() => {}}
         />
       </TreeNodeWrapper>
-    </div>
+    </ScrollArea>
   )
 })
 
@@ -1660,10 +1661,10 @@ const BuildingItem = memo(function BuildingItem({
                 <RoomsSection />
                 <CollectionsSection />
               </div>
-              <div className="subtle-scrollbar relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+              <ScrollArea className="flex-1" contentClassName="relative">
                 <MultiSelectionBadge />
                 <ContentSection />
-              </div>
+              </ScrollArea>
             </div>
           </motion.div>
         )}

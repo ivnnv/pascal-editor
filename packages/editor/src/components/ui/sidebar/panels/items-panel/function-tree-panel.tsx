@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react'
 import { triggerSFX } from '../../../../../lib/sfx-bus'
 import { cn } from '../../../../../lib/utils'
 import { ItemCatalog } from '../../../item-catalog/item-catalog'
+import { ScrollArea } from '../../../primitives/scroll-area'
 import {
   TooltipContent,
   TooltipProvider,
@@ -242,7 +243,7 @@ export function FunctionTreePanel({
       </div>
 
       {/* Item grid */}
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <ScrollArea className="flex-1" contentClassName="p-3">
         {isSearchPending ? (
           <div className="flex h-full items-center justify-center">
             <div className="size-5 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-muted-foreground" />
@@ -262,7 +263,7 @@ export function FunctionTreePanel({
             overrideItems={isServerSearch && search ? (searchItems ?? undefined) : treeItems}
           />
         )}
-      </div>
+      </ScrollArea>
     </div>
   )
 }
