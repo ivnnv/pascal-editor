@@ -12,7 +12,10 @@ import {
   buildOpeningMarkAnnotation,
   type OpeningFloorplanLevelData,
 } from '../shared/opening-documentation'
-import { buildOpeningPlacementDimensions } from '../shared/opening-placement-dimensions'
+import {
+  buildOpeningPlacementDimensions,
+  showsOpeningPlacementDimensions,
+} from '../shared/opening-placement-dimensions'
 import { resolveOpeningPlanPlane } from '../shared/opening-plane-offset'
 
 type Vec = readonly [number, number]
@@ -300,9 +303,12 @@ export function buildWindowFloorplan(
     }
   }
 
-  // Placement-measurement dimensions when actively moving — same
+  // Placement-measurement dimensions while moving or placing — same
   // contract as door (see `nodes/src/door/floorplan.ts`).
-  if (view?.moving && readFloorplanContext(ctx).automaticDimensions) {
+  if (
+    showsOpeningPlacementDimensions(node, view?.moving) &&
+    readFloorplanContext(ctx).automaticDimensions
+  ) {
     for (const dim of buildOpeningPlacementDimensions(node, ctx)) {
       children.push(dim)
     }
