@@ -78,4 +78,24 @@ describe('opening distances while placing', () => {
     expect(dimensionCount(buildDoorFloorplan(door, plan(door)))).toBe(0)
     expect(dimensionCount(buildDoorFloorplan(door, plan(door, true)))).toBeGreaterThan(0)
   })
+
+  test('every distance runs from the opening outward, so a short label sits past the far end', () => {
+    const door = DoorNode.parse({
+      parentId: 'wall_main',
+      position: [1.5, 1.05, 0],
+      metadata: draft,
+    })
+    const dims: Array<{ start: readonly number[]; end: readonly number[] }> = []
+    const collect = (g: FloorplanGeometry | null) => {
+      if (!g) return
+      if (g.kind === 'dimension') dims.push(g)
+      if (g.kind === 'group') g.children.forEach(collect)
+    }
+    collect(buildDoorFloorplan(door, plan(door)))
+
+    expect(dims).toHaveLength(2)
+    for (const { start, end } of dims) {
+      expect(Math.abs(start[0]! - 1.5)).toBeLessThan(Math.abs(end[0]! - 1.5))
+    }
+  })
 })
