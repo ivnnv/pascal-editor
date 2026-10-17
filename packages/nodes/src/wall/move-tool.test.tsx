@@ -311,6 +311,9 @@ describe('3D wall move', () => {
       update: [{ id: DIVIDER_ID, data: { start: [2, 0.04] } }],
     })
     clearSceneHistory()
+    // AIKAZA: with the wall kind registered, as in the app, the move also lines the
+    // wall up with the wall it rejoins, so both ends land on x = 2.53.
+    if (!nodeRegistry.get('wall')) registerNode(wallDefinition)
     const before = sceneNodes()
     const renderer = await armWall(DIVIDER_ID)
     await dragFrom(2, 2.5)
@@ -318,10 +321,10 @@ describe('3D wall move', () => {
       window.dispatchEvent(new Event('pointerup'))
     })
     await act(async () => renderer.unmount())
-    expect(useScene.getState().nodes[DIVIDER_ID]).toMatchObject({
-      start: [2.53, 0.04],
-      end: [2.5, 4],
-    })
+    const moved = useScene.getState().nodes[DIVIDER_ID] as WallNode
+    expect(moved.start[0]).toBeCloseTo(2.53, 9)
+    expect(moved.start[1]).toBeCloseTo(0.04, 9)
+    expect(moved.end).toEqual([2.53, 4])
     expect(nodesOfType('zone')).toHaveLength(2)
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
     useScene.temporal.getState().undo()

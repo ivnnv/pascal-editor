@@ -16,6 +16,7 @@ import {
 } from '@pascal-app/core'
 import {
   alignFloorplanDraftPoint,
+  getActiveSnappingMode,
   getSegmentGridStep,
   isAlignmentGuideActive,
   isAngleSnapActive,
@@ -24,10 +25,11 @@ import {
   resolveEndpointWallSplit,
   snapBuildingLocalToWorldGrid,
   snapScalarToGrid,
-  snapWallDraftPoint,
+  snapWallDraftPointDetailed,
   useAlignmentGuides,
   type WallPlanPoint,
 } from '@pascal-app/editor'
+import { snapWallEndpointToOrigin } from './move-shared'
 
 /**
  * Floor-plan 2D drag affordances for wall.
@@ -265,7 +267,7 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
         // the endpoint angle-locks off the fixed corner (free length), matching
         // the draft tool — the angle path ignores the `gridSnap` override.
         const angleLocked = isAngleSnapActive()
-        const snapped = snapWallDraftPoint({
+        const snapResult = snapWallDraftPointDetailed({
           point: planPoint as WallPlanPoint,
           walls,
           ignoreWallIds: staleWallIds,
@@ -274,6 +276,7 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           magnetic: isMagneticSnapActive(),
           gridSnap: (p) => snapBuildingLocalToWorldGrid(p, getSegmentGridStep()),
         })
+        const snapped = snapResult.point
         // Figma-style alignment on the dragged corner — snaps it onto another
         // object's edge / wall face and publishes a guide. The guide is
         // DISPLAYED in every mode except Off (isAlignmentGuideActive); the
@@ -289,9 +292,15 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           excludeIds: staleWallIds,
           levelId: parentId,
         }) as WallPlanPoint
+        // The corner can always go back where it started, or keep its x / z line,
+        // unless it is joining another wall.
+        const placed =
+          getActiveSnappingMode() === 'off' || snapResult.snap
+            ? aligned
+            : snapWallEndpointToOrigin(planPoint as WallPlanPoint, aligned, movingOriginal)
 
-        const primaryStart: WallPlanPoint = endpoint === 'start' ? aligned : fixedPoint
-        const primaryEnd: WallPlanPoint = endpoint === 'end' ? aligned : fixedPoint
+        const primaryStart: WallPlanPoint = endpoint === 'start' ? placed : fixedPoint
+        const primaryEnd: WallPlanPoint = endpoint === 'end' ? placed : fixedPoint
 
         // ALT detaches: the linked walls keep their original endpoints,
         // and only the dragged wall moves.
