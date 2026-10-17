@@ -672,7 +672,10 @@ const LineWallTool: React.FC = () => {
       const snapResult = snapWallDraftPointDetailed({
         point: localPoint,
         walls: snapWalls,
-        start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+        start:
+          buildingState.current === 1
+            ? [startingPoint.current.x, startingPoint.current.z]
+            : undefined,
         angleSnap: angleLocked,
         magnetic: isMagneticSnapActive(),
       })
@@ -815,7 +818,10 @@ const LineWallTool: React.FC = () => {
           snapWallDraftPointDetailed({
             point: localClick,
             walls: snapWalls,
-            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+            start:
+              buildingState.current === 1
+                ? [startingPoint.current.x, startingPoint.current.z]
+                : undefined,
             angleSnap: angleLocked,
             magnetic: isMagneticSnapActive(),
           }).point,

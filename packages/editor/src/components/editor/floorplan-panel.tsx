@@ -179,6 +179,7 @@ import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-g
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
 import { FloorplanSiteKeyHandler } from '../editor-2d/floorplan-hotkey-handlers'
+import { FloorplanJointAngleLayer } from '../editor-2d/floorplan-joint-angle-layer'
 import { FloorplanMeasurementToolLayer } from '../editor-2d/floorplan-measurement-tool-layer'
 import { FloorplanOpenWallEndsLayer } from '../editor-2d/floorplan-open-wall-ends-layer'
 import {
@@ -11720,6 +11721,8 @@ export function FloorplanPanel({
                 <FloorplanSelectionLayer />
                 <FloorplanRegisteredToolLayer />
                 {floorplanSceneSlot}
+                {/* Inside the render context, so it keeps its size at any zoom. */}
+                <FloorplanJointAngleLayer />
               </FloorplanRenderProvider>
               {/* Cursor-driven placement ghost for movingNode when the
                   active kind is registry-driven. Renders via a portal

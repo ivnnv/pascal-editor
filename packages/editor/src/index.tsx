@@ -198,11 +198,15 @@ export {
 export { preloadRegistryToolModules, ToolManager } from './components/tools/tool-manager'
 export {
   chainEndJoinsExistingWall,
+  cornerAngle,
   createWallOnCurrentLevel,
   findWallSnapTarget,
   getSegmentGridStep,
+  isOnPlanAxis,
   isSegmentLongEnough,
+  jointAngleAt,
   resolveEndpointWallSplit,
+  snapCornerToAngle,
   snapPointToGrid,
   snapScalarToGrid,
   snapWallDraftPoint,
@@ -963,6 +967,7 @@ export {
   useMovingNode,
   useReshapingNode,
 } from './store/use-interaction-scope'
+export { default as useJointAngle } from './store/use-joint-angle'
 export {
   commitMeasurementDraft,
   finishMeasurementDraft,
