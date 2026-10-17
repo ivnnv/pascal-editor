@@ -7311,6 +7311,7 @@ export function FloorplanPanel({
   const northUpAppliedRef = useRef(false)
   const alignFloorplanViewToNorthRef = useRef(alignFloorplanViewToNorth)
   alignFloorplanViewToNorthRef.current = alignFloorplanViewToNorth
+  const northUpCameraWaitRef = useRef<(() => void) | null>(null)
   useEffect(() => {
     if (!isFloorplanOpen) {
       northUpAppliedRef.current = false
@@ -7322,15 +7323,27 @@ export function FloorplanPanel({
     alignFloorplanViewToNorth()
     if (cameraPoseStore.getState().pose) return
     // The hidden 3D camera mounts after the plan and reports its own angle, which the plan follows.
+    let frame: number | null = null
     const unsubscribe = cameraPoseStore.subscribe(
       (state) => state.pose,
       (pose) => {
         if (!pose) return
         unsubscribe()
-        requestAnimationFrame(() => alignFloorplanViewToNorthRef.current())
+        frame = requestAnimationFrame(() => {
+          frame = null
+          if (isFloorplanOpenRef.current) alignFloorplanViewToNorthRef.current()
+        })
       },
     )
+    northUpCameraWaitRef.current = () => {
+      unsubscribe()
+      if (frame !== null) cancelAnimationFrame(frame)
+    }
   }, [alignFloorplanViewToNorth, isFloorplanOpen, viewport])
+  useEffect(() => {
+    if (!isFloorplanOpen) northUpCameraWaitRef.current?.()
+  }, [isFloorplanOpen])
+  useEffect(() => () => northUpCameraWaitRef.current?.(), [])
 
   const clearGuideInteraction = useCallback(() => {
     guideInteractionRef.current = null
@@ -9024,6 +9037,10 @@ export function FloorplanPanel({
   endFloorplanNavigationRef.current = () => endFloorplanNavigation()
 
   const hoveredWallIdRef = useRef<string | null>(null)
+  // A later placement starts from the nearest wall, not the one the last one held.
+  useEffect(() => {
+    if (!isOpeningBuildActive) hoveredWallIdRef.current = null
+  }, [isOpeningBuildActive])
   // A click commits on the wall the hover drew the opening on.
   const findOpeningWallPoint = useCallback(
     (
