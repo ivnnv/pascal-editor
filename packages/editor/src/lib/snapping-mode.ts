@@ -12,9 +12,9 @@ import {
  * alignment so a picked-up group catches neighboring geometry; grid and off
  * remain explicit alternatives in the contextual chip.
  */
-export type SnappingMode = 'grid' | 'lines' | 'angles' | 'off'
+export type SnappingMode = 'grid' | 'smart' | 'lines' | 'angles' | 'off'
 
-export const SNAPPING_MODES: SnappingMode[] = ['grid', 'lines', 'angles', 'off']
+export const SNAPPING_MODES: SnappingMode[] = ['grid', 'smart', 'lines', 'angles', 'off']
 
 export const DEFAULT_SNAPPING_MODE: SnappingMode = 'grid'
 
@@ -34,11 +34,15 @@ export type SnapFlags = {
  *   is part of the "lines" magnetic snap, not a separate always-on behaviour).
  * - `angles` → angle lock only (15°/45° rays).
  * - `off`    → nothing snaps (raw cursor).
+ *
+ * `smart` is the one combined mode: grid, alignment lines and angle lock at once.
  */
 export function resolveSnapFlags(mode: SnappingMode): SnapFlags {
   switch (mode) {
     case 'grid':
       return { grid: true, magnetic: false, angles: false }
+    case 'smart':
+      return { grid: true, magnetic: true, angles: true }
     case 'lines':
       return { grid: false, magnetic: true, angles: false }
     case 'angles':
@@ -48,8 +52,20 @@ export function resolveSnapFlags(mode: SnappingMode): SnapFlags {
   }
 }
 
+/** In Smart mode a snap only pulls within this distance (m) of its target. */
+export const SMART_SNAP_TOLERANCE = 0.08
+
+/** In Smart mode a segment only locks to 0/45/90 within this angle (rad). */
+export const SMART_ANGLE_TOLERANCE = (4 * Math.PI) / 180
+
+/** Smart-mode soft snap: `snapped` when within the tolerance of `raw`, else `raw`. */
+export function softSnapScalar(raw: number, snapped: number): number {
+  return Math.abs(snapped - raw) <= SMART_SNAP_TOLERANCE ? snapped : raw
+}
+
 const SNAPPING_MODE_LABELS: Record<SnappingMode, string> = {
   grid: 'Grid',
+  smart: 'Smart',
   lines: 'Lines',
   angles: 'Angles',
   off: 'Off',
@@ -83,14 +99,14 @@ type SnapModeSet = { modes: SnappingMode[]; default: SnappingMode }
 // angle, so those use the no-angle 'polygon' set.
 const SNAP_PROFILES: Record<SnapContext, SnapModeSet> = {
   // Wall / fence drafting + endpoint reshape: direction matters → angle lock.
-  wall: { modes: ['grid', 'lines', 'angles', 'off'], default: 'grid' },
+  wall: { modes: ['grid', 'smart', 'lines', 'angles', 'off'], default: 'grid' },
   // Item placement / move: magnetic alignment by default; grid is an explicit
   // alternative, and angle lock is meaningless for a footprint.
   item: { modes: ['lines', 'grid', 'off'], default: 'lines' },
   // Structural / surface, no direction to set: slab / ceiling / roof draft+move,
   // whole wall/fence translate, curve reshape, polygon boundary edit. Grid by
   // default, NO angle lock.
-  polygon: { modes: ['grid', 'lines', 'off'], default: 'grid' },
+  polygon: { modes: ['grid', 'smart', 'lines', 'off'], default: 'grid' },
   rotation: { modes: ['angles', 'off'], default: 'angles' },
 }
 

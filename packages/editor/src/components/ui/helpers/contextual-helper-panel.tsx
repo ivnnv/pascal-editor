@@ -163,6 +163,7 @@ function ChipRow({
 
 const SNAPPING_MODE_ICONS = {
   grid: 'lucide:grid-2x2',
+  smart: 'lucide:sparkles',
   lines: 'lucide:magnet',
   angles: 'lucide:triangle',
   off: 'lucide:ban',
@@ -170,6 +171,7 @@ const SNAPPING_MODE_ICONS = {
 
 const SNAPPING_MODE_LABELS = {
   grid: 'Grid',
+  smart: 'Smart',
   lines: 'Lines',
   angles: 'Angles',
   off: 'Off',

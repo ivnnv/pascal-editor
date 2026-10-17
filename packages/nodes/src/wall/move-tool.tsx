@@ -467,6 +467,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
                 rawProj,
                 getWallMoveAlignTargets(originalProj, axis, alignWallsRef.current),
                 snapStep,
+                getActiveSnappingMode() === 'smart',
               )
         const perpDelta = snappedProj - originalProj
         deltaX = axis[0] * perpDelta
