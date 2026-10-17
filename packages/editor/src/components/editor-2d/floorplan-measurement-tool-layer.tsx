@@ -992,17 +992,6 @@ export function FloorplanMeasurementToolLayer() {
           ? [offWallSnap.x, offWallSnap.z]
           : [plan.x, plan.z]
       const raw: MeasurementPoint = [snapped[0], 0, snapped[1]]
-      // DEBUG(#302): what the draft measure snaps to. Remove once the snapping is confirmed.
-      console.debug(
-        `[measure-snap] draft ${JSON.stringify({
-          pointer: [plan.x, plan.z],
-          metresPerPixel: 1 / pixelsPerMetre,
-          reachScale,
-          target: target && { kind: target.kind, point: target.point, wallId: target.wallId },
-          offWallSnap: offWallSnap && [offWallSnap.x, offWallSnap.z],
-          snapped,
-        })}`,
-      )
       // A corner is the strongest signal; an axis lock must not pull the point off it.
       const discreteWallSnap = target?.kind === 'corner'
       const markerKind = target ? (target.kind === 'corner' ? 'endpoint' : 'wall') : null

@@ -134,17 +134,6 @@ export const measurementMoveVertexAffordance: FloorplanAffordance<MeasurementNod
           return
         }
         latest = next
-        // DEBUG(#302): what the endpoint drag snaps to. Remove once the snapping is confirmed.
-        console.debug(
-          `[measure-snap] drag ${JSON.stringify({
-            raw,
-            target: target && { kind: target.kind, point: target.point, wallId: target.wallId },
-            axis: axis?.axis,
-            constrained: point,
-            bound: associated?.point,
-            anchor: associated?.anchor,
-          })}`,
-        )
         useLiveNodeOverrides.getState().set(node.id, { measurement: next })
       },
       canCommit: () => latest !== null,
