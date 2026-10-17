@@ -10,18 +10,39 @@ export type ClosestWallPoint = {
   normal: [number, number, number]
 }
 
-/** Nearest wall to a plan point within `maxDistance`, with the face the point is on. */
+/** How far the pointer may stray from the wall already hosting an opening: past a door's swing. */
+export const STICKY_WALL_DISTANCE_M = 1.2
+
+/**
+ * Nearest wall to a plan point within `maxDistance`, with the face the point is on.
+ * With nothing that close, `stickyWallId` keeps its wall up to `STICKY_WALL_DISTANCE_M`.
+ */
 export function findClosestWallPoint(
   point: PlanPoint,
   walls: WallNode[],
   options?: {
     maxDistance?: number
     canUseWall?: (wall: WallNode) => boolean
+    stickyWallId?: string | null
   },
 ): ClosestWallPoint | null {
-  const maxDistance = options?.maxDistance ?? 0.5
-  const canUseWall = options?.canUseWall
+  const nearest = findNearestWallPoint(
+    point,
+    walls,
+    options?.maxDistance ?? 0.5,
+    options?.canUseWall,
+  )
+  if (nearest || !options?.stickyWallId) return nearest
+  const sticky = walls.filter((wall) => wall.id === options.stickyWallId)
+  return findNearestWallPoint(point, sticky, STICKY_WALL_DISTANCE_M, options.canUseWall)
+}
 
+function findNearestWallPoint(
+  point: PlanPoint,
+  walls: WallNode[],
+  maxDistance: number,
+  canUseWall: ((wall: WallNode) => boolean) | undefined,
+): ClosestWallPoint | null {
   let best: ClosestWallPoint | null = null
   let bestDistSq = maxDistance * maxDistance
 

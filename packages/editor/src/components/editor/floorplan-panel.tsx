@@ -9024,6 +9024,19 @@ export function FloorplanPanel({
   endFloorplanNavigationRef.current = () => endFloorplanNavigation()
 
   const hoveredWallIdRef = useRef<string | null>(null)
+  // A click commits on the wall the hover drew the opening on.
+  const findOpeningWallPoint = useCallback(
+    (
+      point: WallPlanPoint,
+      candidateWalls: WallNode[],
+      options?: { canUseWall?: (wall: WallNode) => boolean },
+    ) =>
+      findClosestWallPoint(point, candidateWalls, {
+        ...options,
+        stickyWallId: hoveredWallIdRef.current,
+      }),
+    [],
+  )
   const hoveredCeilingIdRef = useRef<string | null>(null)
   const emitFloorplanWallLeave = useCallback((wallId: string | null) => {
     if (!wallId) {
@@ -9494,6 +9507,7 @@ export function FloorplanPanel({
       if (isOpeningBuildActive && !isOpeningMoveActive) {
         const closest = findClosestWallPoint(planPoint, walls, {
           canUseWall: (wall) => !isCurvedWall(wall),
+          stickyWallId: hoveredWallIdRef.current,
         })
         if (closest) {
           const dx = closest.wall.end[0] - closest.wall.start[0]
@@ -10024,7 +10038,7 @@ export function FloorplanPanel({
     emitFloorplanGridEvent,
     fenceDraftStart,
     fences,
-    findClosestWallPoint,
+    findClosestWallPoint: findOpeningWallPoint,
     floorplanOpeningLocalY,
     getSnappedFloorplanPoint,
     handleCeilingItemPlacementClick,

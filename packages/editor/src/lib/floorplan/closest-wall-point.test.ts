@@ -32,4 +32,19 @@ describe('findClosestWallPoint', () => {
 
     expect(findClosestWallPoint([2, 0.7], [wall, other])?.wall.id).toBe('wall_c')
   })
+
+  test('keeps the wall hosting the opening while the pointer is in its swing', () => {
+    expect(findClosestWallPoint([1, 0.9], [wall], { stickyWallId: 'wall_a' })?.wall.id).toBe(
+      'wall_a',
+    )
+    expect(findClosestWallPoint([1, 1.5], [wall], { stickyWallId: 'wall_a' })).toBeNull()
+  })
+
+  test('a wall within reach still takes over from the sticky one', () => {
+    const other = WallNode.parse({ id: 'wall_c', start: [0, 1.2], end: [4, 1.2] })
+
+    expect(findClosestWallPoint([2, 0.9], [wall, other], { stickyWallId: 'wall_a' })?.wall.id).toBe(
+      'wall_c',
+    )
+  })
 })
