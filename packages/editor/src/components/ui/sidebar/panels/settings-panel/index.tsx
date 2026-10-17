@@ -84,6 +84,7 @@ import { ConstructionAnimationSetting } from './construction-animation-setting'
 import { KeyboardShortcutsDialog } from './keyboard-shortcuts-dialog'
 import { LoadBuildDialog, type PendingImport } from './load-build-dialog'
 import { PrintExportButton } from './print-export-button'
+import { useShortcutHintsSetting } from './shortcut-hints-setting'
 
 type SceneNode = Record<string, unknown> & {
   id?: unknown
@@ -527,6 +528,7 @@ export function SettingsPanel({
   const setPhase = useEditor((state) => state.setPhase)
   const floorplanMode = useFloorplanMode((state) => state.mode)
   const registryVersion = useRegistryVersion()
+  const shortcutHints = useShortcutHintsSetting()
   const visibleOnlySwitchId = useId()
   const includeNodeTypeIdPrefix = useId()
   const includePresentationIdPrefix = useId()
@@ -1285,6 +1287,11 @@ export function SettingsPanel({
             <AudioSettingsDialog />
             <KeyboardShortcutsDialog />
           </div>
+          <SettingsSwitchRow
+            {...shortcutHints}
+            description="The panel listing the keys for the tool in hand."
+            label="Show shortcut hints"
+          />
         </SettingsSection>
 
         <SettingsSection
