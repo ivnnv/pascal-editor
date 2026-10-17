@@ -243,12 +243,6 @@ export function doorFacing(wall: Pick<WallNode, 'frontSide' | 'backSide'>): {
   return { rotation: [0, 0, 0] }
 }
 
-/** The face a door placed by hand takes: out on an outside wall, else the face hovered. */
-export const placedDoorFace = (
-  wall: Pick<WallNode, 'frontSide' | 'backSide'>,
-  hovered: 'front' | 'back',
-): 'front' | 'back' => doorFacing(wall).side ?? hovered
-
 export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
   refuseParamsWithoutScript(nodes, input)
   const { kind, wallId } = input

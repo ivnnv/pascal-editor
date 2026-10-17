@@ -16,7 +16,6 @@ import {
   type WallNode,
   WallNode as WallNodeSchema,
 } from '@pascal-app/core'
-import { placedDoorFace } from '@pascal-app/core/building'
 import {
   EDITOR_LAYER,
   getSideFromNormal,
@@ -517,8 +516,7 @@ const DoorTool: React.FC = () => {
       }
       lastWallEvent = event
 
-      // An outside wall's door faces out whichever face is hovered, as add_door places it.
-      const faceSide = placedDoorFace(event.node, getSideFromNormal(event.normal))
+      const faceSide = getSideFromNormal(event.normal)
       const side = sideFlip ? (faceSide === 'front' ? 'back' : 'front') : faceSide
       const flipOffset = sideFlip ? Math.PI : 0
       const itemRotation = (faceSide === 'back' ? Math.PI : 0) + flipOffset
@@ -550,7 +548,7 @@ const DoorTool: React.FC = () => {
         return
       }
 
-      const faceSide = placedDoorFace(event.node, getSideFromNormal(event.normal))
+      const faceSide = getSideFromNormal(event.normal)
       const side = sideFlip ? (faceSide === 'front' ? 'back' : 'front') : faceSide
       const itemRotation = (faceSide === 'back' ? Math.PI : 0) + (sideFlip ? Math.PI : 0)
       const { clampedX, clampedY, valid } = resolveWallPlacement(
