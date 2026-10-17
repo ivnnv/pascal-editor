@@ -76,7 +76,7 @@ describe('buildWallFloorplan render purpose', () => {
     backSide: 'interior',
   })
 
-  test('keeps thin walls legible in edit mode but uses modeled thickness in documents', () => {
+  test('draws the modeled thickness in edit mode and in documents', () => {
     const edit = buildWallFloorplan(wall, context('edit'))
     const document = buildWallFloorplan(wall, context('document'))
     const editPolygon = edit && flatten(edit).find((entry) => entry.kind === 'polygon')
@@ -92,7 +92,7 @@ describe('buildWallFloorplan render purpose', () => {
     const documentThickness =
       Math.max(...documentPolygon.points.map((point) => point[1])) -
       Math.min(...documentPolygon.points.map((point) => point[1]))
-    expect(editThickness).toBeCloseTo(0.13)
+    expect(editThickness).toBeCloseTo(0.1)
     expect(documentThickness).toBeCloseTo(0.1)
     expect(readFloorplanGeometryMetadata(editPolygon).annotationObstacle).toBe('outline')
     expect(readFloorplanGeometryMetadata(documentPolygon).annotationObstacle).toBe('outline')
@@ -201,9 +201,9 @@ describe('buildWallFloorplan render purpose', () => {
       return dimension?.kind === 'dimension-string' ? dimension.segments[0]?.start[1] : undefined
     }
 
-    expect(witnessY('finished-faces')).toBeCloseTo(0.065)
-    expect(witnessY('centerline')).toBeCloseTo(0.065)
-    expect(witnessY('stud-faces')).toBeCloseTo(0.065)
+    expect(witnessY('finished-faces')).toBeCloseTo(0.05)
+    expect(witnessY('centerline')).toBeCloseTo(0.05)
+    expect(witnessY('stud-faces')).toBeCloseTo(0.05)
   })
 
   test('shows an orthogonal depth dimension for a curved wall without a radius leader', () => {
@@ -239,9 +239,9 @@ describe('buildWallFloorplan render purpose', () => {
     })
     if (arrows[0]?.kind !== 'move-arrow' || arrows[1]?.kind !== 'move-arrow') return
     expect(arrows[0].point[0]).toBeCloseTo(2)
-    expect(arrows[0].point[1]).toBeCloseTo(-0.885)
+    expect(arrows[0].point[1]).toBeCloseTo(-0.9)
     expect(arrows[1].point[0]).toBeCloseTo(2)
-    expect(arrows[1].point[1]).toBeCloseTo(-1.115)
+    expect(arrows[1].point[1]).toBeCloseTo(-1.1)
   })
 
   test('places thickness handles on both visible faces of a curved wall', () => {
@@ -256,9 +256,9 @@ describe('buildWallFloorplan render purpose', () => {
     expect(handles).toHaveLength(2)
     if (handles[0]?.kind !== 'endpoint-handle' || handles[1]?.kind !== 'endpoint-handle') return
     expect(handles[0].point[0]).toBeCloseTo(2)
-    expect(handles[0].point[1]).toBeCloseTo(-0.935)
+    expect(handles[0].point[1]).toBeCloseTo(-0.95)
     expect(handles[1].point[0]).toBeCloseTo(2)
-    expect(handles[1].point[1]).toBeCloseTo(-1.065)
+    expect(handles[1].point[1]).toBeCloseTo(-1.05)
   })
 })
 

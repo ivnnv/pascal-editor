@@ -39,12 +39,8 @@ import {
 import { buildCurtainWallFloorplan } from './curtain-wall-floorplan'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
 
-// Same constants the legacy `getFloorplanWall` uses (editor/lib/floorplan/walls.ts).
-// Slightly exaggerates thin walls so the 2D plan stays legible without
-// drifting from BIM data. Inlined to keep nodes/wall self-contained.
-const FLOORPLAN_WALL_THICKNESS_SCALE = 1.18
-const FLOORPLAN_MIN_VISIBLE_WALL_THICKNESS = 0.13
-const FLOORPLAN_MAX_EXTRA_THICKNESS = 0.035
+// A hairline on screen, so the edge marks the real face without widening the wall.
+const WALL_EDGE_STROKE_PX = 1
 const FLOORPLAN_SELECTION_HATCH_SPACING = 0.12
 const FLOORPLAN_SELECTED_WALL_STROKE_WIDTH = 0.03
 const FLOORPLAN_SELECTION_HATCH_STROKE_WIDTH = 0.02
@@ -52,13 +48,9 @@ const WALL_DIMENSION_REFERENCES = ['finished-faces', 'centerline', 'stud-faces']
 
 type WallDimensionReference = (typeof WALL_DIMENSION_REFERENCES)[number]
 
+/** The wall's true thickness: its drawn faces are where measures and snaps land. */
 function floorplanWallThickness(wall: WallNode): number {
-  const baseThickness = getWallThickness(wall)
-  const scaledThickness = baseThickness * FLOORPLAN_WALL_THICKNESS_SCALE
-  return Math.min(
-    baseThickness + FLOORPLAN_MAX_EXTRA_THICKNESS,
-    Math.max(baseThickness, scaledThickness, FLOORPLAN_MIN_VISIBLE_WALL_THICKNESS),
-  )
+  return getWallThickness(wall)
 }
 
 function exaggerateWallThickness(wall: WallNode): WallNode {
@@ -351,7 +343,8 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       points,
       fill,
       stroke,
-      strokeWidth: showSelectedChrome ? FLOORPLAN_SELECTED_WALL_STROKE_WIDTH : 0.02,
+      strokeWidth: showSelectedChrome ? FLOORPLAN_SELECTED_WALL_STROKE_WIDTH : WALL_EDGE_STROKE_PX,
+      ...(showSelectedChrome ? {} : { vectorEffect: 'non-scaling-stroke' as const }),
       opacity: 0.92,
       metadata: floorplanGeometryMetadata({ annotationObstacle: 'outline' }),
       // Once the wall is selected, the body keeps catching the pointer
