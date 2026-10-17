@@ -24,9 +24,11 @@ test('separator registers selectable dashed plan and 3D renderers, without movem
     const node = separatorDefinition.schema.parse(separatorDefinition.defaults())
     expect(node.type).toBe('separator')
     expect(separatorDefinition.floorplan!(node, {} as never)).toMatchObject({
-      kind: 'line',
-      strokeDasharray: '6 4',
-      pointerEvents: 'stroke',
+      kind: 'group',
+      children: [
+        { kind: 'line', strokeDasharray: '6 4', pointerEvents: 'none' },
+        { kind: 'hit-line', strokeWidthPx: 12 },
+      ],
     })
     expect(canHostSurfaceChild(node, 'item')).toBe(false)
     expect(node).not.toHaveProperty('thickness')

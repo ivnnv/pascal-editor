@@ -29,7 +29,7 @@ describe('one resolved measure point', () => {
 
   test('a point already on the face binds to it', () => {
     const resolved = finalizeMeasurePoint(
-      { point: [1.253, 0, -2], guide: null, targetNodeId: 'wall_a' },
+      { point: [1.253, 0, -2], guide: null, targetNodeId: 'wall_a', markerKind: null },
       faceBinding,
     )
     expect(resolved.point).toEqual([1.253, 0, -2])
