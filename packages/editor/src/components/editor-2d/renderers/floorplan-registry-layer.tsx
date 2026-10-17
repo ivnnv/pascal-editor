@@ -204,6 +204,14 @@ export function resolveFloorplanHandleUnitsPerPixel(unitsPerPixel: number): numb
   return Math.min(unitsPerPixel, MAX_HANDLE_UNITS_PER_PIXEL)
 }
 
+// The zoom (metres per screen pixel) at which the metre-sized move dot and arrows were tuned.
+const WORLD_HANDLE_UNITS_PER_PIXEL = 0.01
+
+/** Scales the metre-sized move dot and arrows so they stop growing on screen when zoomed in. */
+export function resolveFloorplanWorldHandleScale(unitsPerPixel: number): number {
+  return Math.min(1, unitsPerPixel / WORLD_HANDLE_UNITS_PER_PIXEL)
+}
+
 const ScaleAwareFloorplanGroupSelectionBox = memo(function ScaleAwareFloorplanGroupSelectionBox(
   props: Omit<ComponentProps<typeof FloorplanGroupSelectionBox>, 'unitsPerPixel'>,
 ) {
@@ -2639,6 +2647,7 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
   // Keep handles pixel-sized through normal navigation, then let them shrink
   // with the plan once zoom compensation would make them dominate the geometry.
   const handleUnitsPerPixel = resolveFloorplanHandleUnitsPerPixel(unitsPerPixel)
+  const worldHandleScale = resolveFloorplanWorldHandleScale(unitsPerPixel)
 
   return renderInteractive(geometry, 0)
 
@@ -2805,14 +2814,15 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
         // shrinks when they zoom out — same scaling rule as the door
         // footprint itself. Sizes are tuned for a ~0.9 m door at default
         // zoom; the ratios match the legacy 13/15/6/16/7/18 px stack.
-        const baseRadius = 0.1
-        const hoverRadius = 0.115
+        const k = worldHandleScale
+        const baseRadius = 0.1 * k
+        const hoverRadius = 0.115 * k
         const outerRadius = isHovered ? hoverRadius : baseRadius
-        const dotRadius = 0.045
-        const fillStroke = 0.005
-        const glowStroke = 0.12
-        const ringStroke = 0.055
-        const hitStroke = 0.14
+        const dotRadius = 0.045 * k
+        const fillStroke = 0.005 * k
+        const glowStroke = 0.12 * k
+        const ringStroke = 0.055 * k
+        const hitStroke = 0.14 * k
         // Same 5-circle stack as the orange endpoint dot — hover glow +
         // hover ring + filled outer + inner dot + transparent hit. On
         // pointer-down, the layer calls `setMovingNode(node)`, which
@@ -2923,7 +2933,7 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
           <g
             key={keyHint}
             onClick={(e) => e.stopPropagation()}
-            transform={`translate(${g.point[0]} ${g.point[1]}) rotate(${angleDeg})`}
+            transform={`translate(${g.point[0]} ${g.point[1]}) rotate(${angleDeg}) scale(${worldHandleScale})`}
           >
             <path
               d={arcPath}
@@ -3012,7 +3022,7 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
           <g
             key={keyHint}
             onClick={(e) => e.stopPropagation()}
-            transform={`translate(${g.point[0]} ${g.point[1]}) rotate(${angleDeg})`}
+            transform={`translate(${g.point[0]} ${g.point[1]}) rotate(${angleDeg}) scale(${worldHandleScale})`}
           >
             <path d={arrowD} fill={fill} pointerEvents="none" />
             <path

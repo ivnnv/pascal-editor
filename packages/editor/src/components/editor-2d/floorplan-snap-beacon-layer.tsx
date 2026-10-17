@@ -55,13 +55,25 @@ function SnapMarker({
   x: number
   z: number
 }) {
+  // A faint fill with a thin outline, so the snapped geometry stays visible under it.
+  const glyph = { fillOpacity: 0.12, strokeWidth: stroke }
   if (kind === 'endpoint') {
-    return <rect fill={ENDPOINT_COLOR} height={m * 2} width={m * 2} x={x - m} y={z - m} />
+    return (
+      <rect
+        {...glyph}
+        fill={ENDPOINT_COLOR}
+        height={m * 2}
+        stroke={ENDPOINT_COLOR}
+        width={m * 2}
+        x={x - m}
+        y={z - m}
+      />
+    )
   }
   if (kind === 'midpoint') {
     const t = m * 1.3
     const points = `${x},${z - t} ${x - t},${z + t} ${x + t},${z + t}`
-    return <polygon fill={color} points={points} />
+    return <polygon {...glyph} fill={color} points={points} stroke={color} />
   }
   if (kind === 'intersection') {
     const c = m * 1.4
@@ -73,5 +85,5 @@ function SnapMarker({
     )
   }
   // 'wall' (edge / along-wall) → circle
-  return <circle cx={x} cy={z} fill={color} r={m} />
+  return <circle {...glyph} cx={x} cy={z} fill={color} r={m} stroke={color} />
 }
