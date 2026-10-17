@@ -14,7 +14,13 @@ import {
   type WallPlanPoint,
   WallNode as WallSchema,
 } from '@pascal-app/core'
-import { isSegmentLongEnough, snapScalarToGrid, softSnapScalar } from '@pascal-app/editor'
+import {
+  getPlanSnapScale,
+  isSegmentLongEnough,
+  planSnapReach,
+  snapScalarToGrid,
+  softSnapScalar,
+} from '@pascal-app/editor'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 /**
@@ -29,6 +35,17 @@ const POINT_EPSILON = 1e-6
 
 /** How close (m) a sideways wall drag must get to an alignment line to snap onto it. */
 export const WALL_MOVE_ALIGN_TOLERANCE = 0.1
+
+// The same pull in screen pixels while the plan is shown: 10 cm at its tuned zoom.
+const WALL_MOVE_ALIGN_REACH_PX = 10
+
+/** The alignment pull at the plan's zoom, never past `WALL_MOVE_ALIGN_TOLERANCE`. */
+export function wallMoveAlignTolerance(): number {
+  const metresPerPixel = getPlanSnapScale()
+  return metresPerPixel
+    ? planSnapReach(WALL_MOVE_ALIGN_REACH_PX, metresPerPixel, WALL_MOVE_ALIGN_TOLERANCE)
+    : WALL_MOVE_ALIGN_TOLERANCE
+}
 
 /**
  * Positions along `axis` a sideways wall drag aligns to: the wall's own
@@ -57,8 +74,8 @@ export function snapWallEndpointToOrigin(
   snappedPoint: WallPlanPoint,
   origin: WallPlanPoint,
 ): WallPlanPoint {
-  const nearX = Math.abs(rawPoint[0] - origin[0]) <= WALL_MOVE_ALIGN_TOLERANCE
-  const nearZ = Math.abs(rawPoint[1] - origin[1]) <= WALL_MOVE_ALIGN_TOLERANCE
+  const nearX = Math.abs(rawPoint[0] - origin[0]) <= wallMoveAlignTolerance()
+  const nearZ = Math.abs(rawPoint[1] - origin[1]) <= wallMoveAlignTolerance()
   if (nearX && nearZ) return [origin[0], origin[1]]
   if (nearX) return [origin[0], snappedPoint[1]]
   if (nearZ) return [snappedPoint[0], origin[1]]
@@ -86,7 +103,7 @@ export function snapWallEndpointToExtension(
     uz: number
     past: 'start' | 'end'
   } | null = null
-  let bestDistance = WALL_MOVE_ALIGN_TOLERANCE
+  let bestDistance = wallMoveAlignTolerance()
   for (const wall of walls) {
     // A curved wall does not continue along its chord.
     if (isCurvedWall(wall)) continue
@@ -117,7 +134,7 @@ export function snapWallEndpointToExtension(
       : (placedPoint[0] - wall.start[0]) * ux + (placedPoint[1] - wall.start[1]) * uz
   const point: WallPlanPoint = [wall.start[0] + ux * along, wall.start[1] + uz * along]
   // A crossing far from the cursor is not what the user is reaching for.
-  if (Math.hypot(point[0] - rawPoint[0], point[1] - rawPoint[1]) > 3 * WALL_MOVE_ALIGN_TOLERANCE) {
+  if (Math.hypot(point[0] - rawPoint[0], point[1] - rawPoint[1]) > 3 * wallMoveAlignTolerance()) {
     return null
   }
   const from = past === 'start' ? wall.start : wall.end
@@ -153,7 +170,7 @@ export function resolveDirectedCorner(
   lines: readonly CornerLine[],
 ): { point: WallPlanPoint; line: CornerLine | null } {
   let best: { point: WallPlanPoint; line: CornerLine } | null = null
-  let bestDistance = WALL_MOVE_ALIGN_TOLERANCE
+  let bestDistance = wallMoveAlignTolerance()
   for (const line of lines) {
     // fixed + direction * t = line.point + line.along * u
     const cross = direction[0] * line.along[1] - direction[1] * line.along[0]
@@ -184,7 +201,7 @@ export function snapWallMoveProjection(
   softGrid = false,
 ): number {
   let best: number | null = null
-  let bestDistance = WALL_MOVE_ALIGN_TOLERANCE
+  let bestDistance = wallMoveAlignTolerance()
   for (const target of alignTargets) {
     const distance = Math.abs(rawProjection - target)
     if (distance <= bestDistance) {

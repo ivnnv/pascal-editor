@@ -40,7 +40,7 @@ import {
   resolveDirectedCorner,
   snapWallEndpointToExtension,
   snapWallEndpointToOrigin,
-  WALL_MOVE_ALIGN_TOLERANCE,
+  wallMoveAlignTolerance,
 } from './move-shared'
 
 /**
@@ -324,9 +324,9 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           // a guide's line, or another wall's continuation).
           const raw = planPoint as WallPlanPoint
           const lines: CornerLine[] = []
-          if (Math.abs(raw[1] - movingOriginal[1]) <= WALL_MOVE_ALIGN_TOLERANCE)
+          if (Math.abs(raw[1] - movingOriginal[1]) <= wallMoveAlignTolerance())
             lines.push({ point: movingOriginal, along: [1, 0] })
-          if (Math.abs(raw[0] - movingOriginal[0]) <= WALL_MOVE_ALIGN_TOLERANCE)
+          if (Math.abs(raw[0] - movingOriginal[0]) <= wallMoveAlignTolerance())
             lines.push({ point: movingOriginal, along: [0, 1] })
           if (aligned[0] !== snapped[0]) lines.push({ point: aligned, along: [0, 1] })
           if (aligned[1] !== snapped[1]) lines.push({ point: aligned, along: [1, 0] })

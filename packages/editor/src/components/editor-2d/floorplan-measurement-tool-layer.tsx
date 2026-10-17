@@ -18,17 +18,15 @@ import {
   measurementPrismVolume,
   nodeRegistry,
   useScene,
-  type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  buildMeasureSnapGeometry,
   type MeasureSnapFace,
-  type MeasureSnapGeometry,
   type MeasureSnapTarget,
   resolveMeasureSnap,
 } from '../../lib/measure-snap'
+import { levelMeasureSnapGeometry, measureSnapReachScale } from '../../lib/measure-snap-level'
 import { measurementPolygonLabelAnchor } from '../../lib/measurement-label'
 import {
   type FaceLine,
@@ -49,9 +47,7 @@ import {
 } from '../../lib/measurements'
 import { clearSurfacePlanSnapFeedback } from '../../lib/surface-plan-snap'
 import useEditor from '../../store/use-editor'
-import useMeasureSnapSettings, {
-  MEASURE_SNAP_STRENGTH_SCALE,
-} from '../../store/use-measure-snap-settings'
+import useMeasureSnapSettings from '../../store/use-measure-snap-settings'
 import {
   commitMeasurementDraft,
   type MeasurementAxisGuide,
@@ -440,25 +436,6 @@ export function resolveFloorplanMeasurementAxisSnap(
 
 // AIKAZA: how close the pointer must come to where a wall face squares up with the previous point.
 const FACE_AXIS_SNAP_DISTANCE_PX = 28
-
-let measureSnapCache: {
-  nodes: unknown
-  levelId: string | null
-  geometry: MeasureSnapGeometry
-} | null = null
-
-/** The level's wall corners and faces a measure can land on, cached until the scene changes. */
-function levelMeasureSnapGeometry(levelId: string | null): MeasureSnapGeometry {
-  const nodes = useScene.getState().nodes
-  if (measureSnapCache?.nodes === nodes && measureSnapCache.levelId === levelId)
-    return measureSnapCache.geometry
-  const walls = Object.values(nodes).filter(
-    (node): node is WallNode => node?.type === 'wall' && (!levelId || node.parentId === levelId),
-  )
-  const geometry = buildMeasureSnapGeometry(walls)
-  measureSnapCache = { nodes, levelId, geometry }
-  return geometry
-}
 
 /** Curved walls and other kinds snap through their projected plan geometry. */
 function projectedSnapOffStraightWall(nodeId: string): boolean {
@@ -989,7 +966,7 @@ export function FloorplanMeasurementToolLayer() {
       const groupMatrix = group.getScreenCTM()
       const pixelsPerMetre = groupMatrix ? Math.hypot(groupMatrix.a, groupMatrix.b) : 100
       const settings = useMeasureSnapSettings.getState()
-      const reachScale = MEASURE_SNAP_STRENGTH_SCALE[settings.strength]
+      const reachScale = measureSnapReachScale(1 / pixelsPerMetre)
       const target = event.altKey
         ? null
         : resolveMeasureSnap(

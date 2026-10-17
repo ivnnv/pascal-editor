@@ -658,6 +658,7 @@ export {
   hasActivePaintMaterial,
 } from './lib/material-paint'
 export { useMaterialPaintPanelModel } from './lib/material-paint-panel-model'
+export { resolveLevelMeasureSnap } from './lib/measure-snap-level'
 export {
   CREATABLE_MEASUREMENT_KINDS,
   type CreatableMeasurementKind,
@@ -805,7 +806,7 @@ export {
   type SlabPlanSnapResult,
 } from './lib/slab-plan-snap'
 // AIKAZA: the plan's zoom, for snaps that reach a fixed distance on screen.
-export { getPlanSnapScale, SNAP_REACH_PX } from './lib/snap-reach'
+export { getPlanSnapScale, planSnapReach, SNAP_REACH_PX } from './lib/snap-reach'
 export { useSnappingHold } from './lib/snapping-hold'
 export {
   cycleSnappingModeIn,
