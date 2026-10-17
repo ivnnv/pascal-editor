@@ -15,7 +15,10 @@ import {
   buildOpeningMarkAnnotation,
   type OpeningFloorplanLevelData,
 } from '../shared/opening-documentation'
-import { buildOpeningPlacementDimensions } from '../shared/opening-placement-dimensions'
+import {
+  buildOpeningPlacementDimensions,
+  showsOpeningPlacementDimensions,
+} from '../shared/opening-placement-dimensions'
 import { resolveOpeningPlanPlane } from '../shared/opening-plane-offset'
 
 /**
@@ -821,9 +824,11 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
   }
 
   // Placement-measurement dimensions — distances to adjacent openings
-  // (or wall ends) on each side. Only visible while actively moving
-  // (the user clicked Move or grabbed the orange dot).
-  if (view?.moving && readFloorplanContext(ctx).automaticDimensions) {
+  // (or wall ends) on each side, while moving or placing the opening.
+  if (
+    showsOpeningPlacementDimensions(node, view?.moving) &&
+    readFloorplanContext(ctx).automaticDimensions
+  ) {
     for (const dim of buildOpeningPlacementDimensions(node, ctx)) {
       children.push(dim)
     }

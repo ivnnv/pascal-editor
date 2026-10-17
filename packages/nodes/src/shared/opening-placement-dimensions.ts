@@ -17,6 +17,16 @@ import { readFloorplanContext } from '@pascal-app/editor'
 import { formatConstructionLength } from './construction-length'
 import { resolveWallOpeningCeiling } from './wall-opening-ceiling'
 
+/** True while the opening is being moved or placed, when its distances to the wall ends show. */
+export function showsOpeningPlacementDimensions(
+  opening: DoorNode | WindowNode,
+  moving: boolean | undefined,
+): boolean {
+  return (
+    moving === true || (opening.metadata as { isTransient?: boolean } | null)?.isTransient === true
+  )
+}
+
 /**
  * Build placement-measurement dimension lines for a door / window
  * being moved on a wall. Mirrors the legacy
@@ -114,12 +124,15 @@ export function buildOpeningPlacementDimensions(
 
   // Edge-to-edge clearance to the nearest neighbour (or wall end) on each side.
   for (const gap of guides.gaps) {
-    const lo = Math.min(gap.fromS, gap.toS)
-    const hi = Math.max(gap.fromS, gap.toS)
+    // Run from the opening outward: a label too long for its gap goes past the end, away from it.
+    const fromOpening =
+      Math.abs(gap.fromS - opening.position[0]) <= Math.abs(gap.toS - opening.position[0])
+    const near = fromOpening ? gap.fromS : gap.toS
+    const far = fromOpening ? gap.toS : gap.fromS
     out.push({
       kind: 'dimension',
-      start: facePoint(lo),
-      end: facePoint(hi),
+      start: facePoint(near),
+      end: facePoint(far),
       offsetNormal: outwardNormal,
       offsetDistance: FLOORPLAN_WALL_OUTER_MEASUREMENT_OFFSET,
       extensionOvershoot: 0.12,
