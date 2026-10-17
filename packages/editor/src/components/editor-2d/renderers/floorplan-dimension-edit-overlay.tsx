@@ -143,6 +143,17 @@ export function FloorplanDimensionEditOverlay(): React.ReactElement | null {
     }
   }, [])
 
+  // While the input is open, the label around it reads as clickable rather than
+  // typeable, so a second click (which splits a wall) is discoverable.
+  useEffect(() => {
+    if (!target) return
+    const hits = [...document.querySelectorAll<SVGElement>('[data-floorplan-dimension-hit]')]
+    for (const hit of hits) hit.style.cursor = 'pointer'
+    return () => {
+      for (const hit of hits) hit.style.removeProperty('cursor')
+    }
+  }, [target])
+
   useEffect(() => {
     if (!target) return
     const frame = requestAnimationFrame(() => {
@@ -181,7 +192,7 @@ export function FloorplanDimensionEditOverlay(): React.ReactElement | null {
         style={{ left: target.rect.left, top: target.rect.top, width: target.rect.width }}
       >
         <input
-          className="w-full rounded-sm border border-primary bg-card px-1 py-0.5 text-center font-mono text-foreground text-xs shadow-sm outline-none"
+          className="w-full cursor-pointer rounded-sm border border-primary bg-card px-1 py-0.5 text-center font-mono text-foreground text-xs shadow-sm outline-none"
           onBlur={() => setTarget(null)}
           onChange={(event) => {
             setDraft(event.target.value)
