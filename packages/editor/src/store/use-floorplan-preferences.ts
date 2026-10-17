@@ -11,7 +11,7 @@ interface FloorplanPreferencesState {
 const useFloorplanPreferences = create<FloorplanPreferencesState>()(
   persist(
     (set) => ({
-      startNorthUp: false,
+      startNorthUp: true,
       setStartNorthUp: (value) => set({ startNorthUp: value }),
     }),
     { name: 'pascal-floorplan-preferences' },

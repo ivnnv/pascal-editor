@@ -7358,11 +7358,15 @@ export function FloorplanPanel({
     publishFloorplanNavigationPose(localCenter, nextUserRotationDeg, currentViewport.width)
   }, [buildingRotationDeg, publishFloorplanNavigationPose, smoothFloorplanNavigationView])
 
-  // The first time the plan shows, turn it north-up when the user asked for that.
-  const startOrientationAppliedRef = useRef(false)
+  // Each time the plan comes into view, turn it north-up when the user asked for that.
+  const northUpAppliedRef = useRef(false)
   useEffect(() => {
-    if (startOrientationAppliedRef.current || !isFloorplanOpen || !viewport) return
-    startOrientationAppliedRef.current = true
+    if (!isFloorplanOpen) {
+      northUpAppliedRef.current = false
+      return
+    }
+    if (northUpAppliedRef.current || !viewport) return
+    northUpAppliedRef.current = true
     if (useFloorplanPreferences.getState().startNorthUp) alignFloorplanViewToNorth()
   }, [alignFloorplanViewToNorth, isFloorplanOpen, viewport])
 
