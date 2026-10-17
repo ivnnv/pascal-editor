@@ -49,6 +49,9 @@ describe('AssetUrl', () => {
       ['', 'empty string'],
       ['not a url at all', 'non-url string'],
       ['://missing-scheme', 'malformed'],
+      ['//169.254.169.254/latest/meta-data/', 'protocol-relative to cloud metadata'],
+      ['//evil.com/a.glb', 'protocol-relative to another host'],
+      ['/\\evil.com/a.glb', 'backslash path read as another host'],
     ]
     for (const [url, label] of cases) {
       test(`rejects ${label}: ${url}`, () => {
