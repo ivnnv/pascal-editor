@@ -958,6 +958,7 @@ export { type FirstPersonHudState, useFirstPersonHud } from './store/use-first-p
 export { default as useFloorplanAnnotationVisibility } from './store/use-floorplan-annotation-visibility'
 export { useFloorplanDraftPreview } from './store/use-floorplan-draft-preview'
 export { default as useFloorplanMode } from './store/use-floorplan-mode'
+export { default as useFloorplanPreferences } from './store/use-floorplan-preferences'
 export { default as useFollowPascal } from './store/use-follow-pascal'
 export {
   default as useInteractionScope,
