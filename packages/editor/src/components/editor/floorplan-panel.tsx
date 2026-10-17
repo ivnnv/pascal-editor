@@ -138,7 +138,6 @@ import {
 } from '../../lib/wall-polygon-draft'
 import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
 import { nextZoneName } from '../../lib/zone-name'
-import { cameraPoseStore } from '../../store/camera-pose-store'
 import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-store'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useDrawingView from '../../store/use-drawing-view'
@@ -7432,9 +7431,6 @@ export function FloorplanPanel({
 
   // Each time the plan comes into view, turn it north-up when the user asked for that.
   const northUpAppliedRef = useRef(false)
-  const alignFloorplanViewToNorthRef = useRef(alignFloorplanViewToNorth)
-  alignFloorplanViewToNorthRef.current = alignFloorplanViewToNorth
-  const northUpCameraWaitRef = useRef<(() => void) | null>(null)
   useEffect(() => {
     if (!isFloorplanOpen) {
       northUpAppliedRef.current = false
@@ -7442,31 +7438,8 @@ export function FloorplanPanel({
     }
     if (northUpAppliedRef.current || !viewport) return
     northUpAppliedRef.current = true
-    if (!useFloorplanPreferences.getState().startNorthUp) return
-    alignFloorplanViewToNorth()
-    if (cameraPoseStore.getState().pose) return
-    // The hidden 3D camera mounts after the plan and reports its own angle, which the plan follows.
-    let frame: number | null = null
-    const unsubscribe = cameraPoseStore.subscribe(
-      (state) => state.pose,
-      (pose) => {
-        if (!pose) return
-        unsubscribe()
-        frame = requestAnimationFrame(() => {
-          frame = null
-          if (isFloorplanOpenRef.current) alignFloorplanViewToNorthRef.current()
-        })
-      },
-    )
-    northUpCameraWaitRef.current = () => {
-      unsubscribe()
-      if (frame !== null) cancelAnimationFrame(frame)
-    }
+    if (useFloorplanPreferences.getState().startNorthUp) alignFloorplanViewToNorth()
   }, [alignFloorplanViewToNorth, isFloorplanOpen, viewport])
-  useEffect(() => {
-    if (!isFloorplanOpen) northUpCameraWaitRef.current?.()
-  }, [isFloorplanOpen])
-  useEffect(() => () => northUpCameraWaitRef.current?.(), [])
 
   const clearGuideInteraction = useCallback(() => {
     guideInteractionRef.current = null
