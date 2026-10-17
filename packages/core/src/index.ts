@@ -936,6 +936,7 @@ export {
   DEFAULT_WALL_HEIGHT,
   DEFAULT_WALL_THICKNESS,
   getWallPlanFootprint,
+  getWallPlanOutline,
   getWallThickness,
 } from './systems/wall/wall-footprint'
 export {
