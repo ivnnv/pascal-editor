@@ -484,6 +484,22 @@ export function isFloorplanOpeningPlacementState({
   )
 }
 
+/** A door or window being moved, or the draft one being placed. */
+export function isFloorplanOpeningBeingPlaced(node: AnyNode, moving: boolean): boolean {
+  if (!nodeRegistry.get(node.type)?.capabilities?.wallOpeningPlacement) return false
+  return moving || (node.metadata as { isTransient?: boolean } | null)?.isTransient === true
+}
+
+/** Its distances to the wall ends show whatever the plan mode hides. */
+export function withOpeningPlacementDimensions(
+  visibility: FloorplanAnnotationVisibility,
+  placingOpening: boolean,
+): FloorplanAnnotationVisibility {
+  return placingOpening && !visibility.automaticDimensions
+    ? { ...visibility, automaticDimensions: true }
+    : visibility
+}
+
 /**
  * Whether a press on an entry belongs to the active tool instead of selecting
  * the entry. Build tools own the plan the way their 3D tools own the canvas,
@@ -2082,14 +2098,13 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   const liveOverrides = floorplanVisible
     ? useLiveNodeOverrides.getState().overrides
     : EMPTY_LIVE_OVERRIDES
-  const presentationVisibility = resolveFloorplanAnnotationVisibility(
-    floorplanMode,
-    annotationVisibility,
-    {
+  const presentationVisibility = withOpeningPlacementDimensions(
+    resolveFloorplanAnnotationVisibility(floorplanMode, annotationVisibility, {
       referencedAnnotationRole,
       selected,
       target: 'editor',
-    },
+    }),
+    isFloorplanOpeningBeingPlaced(node, moving),
   )
 
   const handlePointerDown = useCallback(

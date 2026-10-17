@@ -17,6 +17,16 @@ import { readFloorplanContext } from '@pascal-app/editor'
 import { formatConstructionLength } from './construction-length'
 import { resolveWallOpeningCeiling } from './wall-opening-ceiling'
 
+/** True while the opening is being moved or placed, when its distances to the wall ends show. */
+export function showsOpeningPlacementDimensions(
+  opening: DoorNode | WindowNode,
+  moving: boolean | undefined,
+): boolean {
+  return (
+    moving === true || (opening.metadata as { isTransient?: boolean } | null)?.isTransient === true
+  )
+}
+
 /**
  * Build placement-measurement dimension lines for a door / window
  * being moved on a wall. Mirrors the legacy

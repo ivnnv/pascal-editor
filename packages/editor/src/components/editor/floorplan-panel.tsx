@@ -96,6 +96,7 @@ import {
   type FloorplanNodeTransform as SharedFloorplanNodeTransform,
   worldToFloorplanLocalPoint,
 } from '../../lib/floorplan'
+import { findClosestWallPoint } from '../../lib/floorplan/closest-wall-point'
 import { buildFloorplanContext } from '../../lib/floorplan/floorplan-readonly'
 // Site-plan view. Owned under `lib/floorplan/site-plan/**`; this panel
 // only chooses between it and the registry layer, and mounts the switch.
@@ -147,6 +148,7 @@ import {
 } from '../../lib/wall-polygon-draft'
 import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
 import { nextZoneName } from '../../lib/zone-name'
+import { cameraPoseStore } from '../../store/camera-pose-store'
 import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-store'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useDrawingView from '../../store/use-drawing-view'
@@ -2770,59 +2772,6 @@ function getRotatedViewBoxBounds(
   }
 
   return { minX, maxX, minY, maxY }
-}
-
-function findClosestWallPoint(
-  point: WallPlanPoint,
-  walls: WallNode[],
-  options?: {
-    maxDistance?: number
-    canUseWall?: (wall: WallNode) => boolean
-  },
-): {
-  wall: WallNode
-  point: WallPlanPoint
-  t: number
-  normal: [number, number, number]
-} | null {
-  const maxDistance = options?.maxDistance ?? 0.5
-  const canUseWall = options?.canUseWall
-
-  let best: {
-    wall: WallNode
-    point: WallPlanPoint
-    t: number
-    normal: [number, number, number]
-  } | null = null
-  let bestDistSq = maxDistance * maxDistance
-
-  for (const wall of walls) {
-    if (canUseWall && !canUseWall(wall)) {
-      continue
-    }
-
-    const [x1, z1] = wall.start
-    const [x2, z2] = wall.end
-    const dx = x2 - x1
-    const dz = z2 - z1
-    const lengthSq = dx * dx + dz * dz
-    if (lengthSq < 1e-9) continue
-
-    let t = ((point[0] - x1) * dx + (point[1] - z1) * dz) / lengthSq
-    t = Math.max(0, Math.min(1, t))
-
-    const px = x1 + t * dx
-    const pz = z1 + t * dz
-
-    const distSq = (point[0] - px) ** 2 + (point[1] - pz) ** 2
-    if (distSq < bestDistSq) {
-      bestDistSq = distSq
-      // Provide an arbitrary front-facing normal so the tool knows it's a valid wall side
-      best = { wall, point: [px, pz], t, normal: [0, 0, 1] }
-    }
-  }
-
-  return best
 }
 
 type GuideImageDimensions = {
@@ -7360,6 +7309,8 @@ export function FloorplanPanel({
 
   // Each time the plan comes into view, turn it north-up when the user asked for that.
   const northUpAppliedRef = useRef(false)
+  const alignFloorplanViewToNorthRef = useRef(alignFloorplanViewToNorth)
+  alignFloorplanViewToNorthRef.current = alignFloorplanViewToNorth
   useEffect(() => {
     if (!isFloorplanOpen) {
       northUpAppliedRef.current = false
@@ -7367,7 +7318,18 @@ export function FloorplanPanel({
     }
     if (northUpAppliedRef.current || !viewport) return
     northUpAppliedRef.current = true
-    if (useFloorplanPreferences.getState().startNorthUp) alignFloorplanViewToNorth()
+    if (!useFloorplanPreferences.getState().startNorthUp) return
+    alignFloorplanViewToNorth()
+    if (cameraPoseStore.getState().pose) return
+    // The hidden 3D camera mounts after the plan and reports its own angle, which the plan follows.
+    const unsubscribe = cameraPoseStore.subscribe(
+      (state) => state.pose,
+      (pose) => {
+        if (!pose) return
+        unsubscribe()
+        requestAnimationFrame(() => alignFloorplanViewToNorthRef.current())
+      },
+    )
   }, [alignFloorplanViewToNorth, isFloorplanOpen, viewport])
 
   const clearGuideInteraction = useCallback(() => {
