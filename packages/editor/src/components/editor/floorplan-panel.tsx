@@ -128,6 +128,7 @@ import { enterBuildingFromPlanHit } from '../../lib/selection-routing'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL, siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
+import { getPlanSnapScale } from '../../lib/snap-reach'
 import {
   cancelPendingZonePaint,
   focusedUnitNode,
@@ -8412,6 +8413,7 @@ export function FloorplanPanel({
           walls,
           ignoreWallIds: [dragState.wallId],
           magnetic: isMagneticSnapActive(),
+          planScale: getPlanSnapScale(),
         })
         const snappedPoint = snapResult.point
         // Magnetic beacon at the endpoint when it locked onto existing geometry.
@@ -9634,6 +9636,7 @@ export function FloorplanPanel({
         start: draftStart ?? undefined,
         angleSnap: wallAngleSnap,
         magnetic: isMagneticSnapActive(),
+        planScale: getPlanSnapScale(),
       })
       const wallSnapped = wallSnap.point
       // Locked onto existing geometry (corner / midpoint / crossing / edge) →
@@ -10038,7 +10041,12 @@ export function FloorplanPanel({
       angleSnap?: boolean
       bypassSnap?: boolean
       step?: number
-    }) => snapWallDraftPoint({ ...args, magnetic: isMagneticSnapActive() }),
+    }) =>
+      snapWallDraftPoint({
+        ...args,
+        magnetic: isMagneticSnapActive(),
+        planScale: getPlanSnapScale(),
+      }),
     [],
   )
   const { handleBackgroundPlacementClick } = useFloorplanBackgroundPlacement({

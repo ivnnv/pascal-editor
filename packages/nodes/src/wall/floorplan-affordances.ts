@@ -18,6 +18,7 @@ import {
   alignFloorplanDraftPoint,
   cornerAngle,
   getActiveSnappingMode,
+  getPlanSnapScale,
   getSegmentGridStep,
   isAlignmentGuideActive,
   isAngleSnapActive,
@@ -294,6 +295,8 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           angleSnap: angleLocked,
           magnetic: isMagneticSnapActive(),
           gridSnap: (p) => snapBuildingLocalToWorldGrid(p, getSegmentGridStep()),
+          // AIKAZA: reach a fixed distance on screen, whatever the zoom.
+          planScale: getPlanSnapScale(),
         })
         const snapped = snapResult.point
         // Figma-style alignment on the dragged corner — snaps it onto another

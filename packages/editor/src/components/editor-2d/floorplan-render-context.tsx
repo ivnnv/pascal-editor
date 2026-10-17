@@ -10,6 +10,7 @@ import {
   useRef,
   useSyncExternalStore,
 } from 'react'
+import { setPlanSnapScale } from '../../lib/snap-reach'
 
 /**
  * Per-frame render context shared between the legacy `floorplan-panel.tsx`
@@ -99,7 +100,9 @@ export function FloorplanRenderProvider({
   const subscribeUnitsPerPixel = renderScaleReference.current.subscribe
   useLayoutEffect(() => {
     renderScaleReference.current?.update(unitsPerPixel)
+    setPlanSnapScale(unitsPerPixel)
   }, [unitsPerPixel])
+  useLayoutEffect(() => () => setPlanSnapScale(null), [])
   const staticValue = useMemo<FloorplanStaticRenderContextValue>(
     () => ({
       palette,

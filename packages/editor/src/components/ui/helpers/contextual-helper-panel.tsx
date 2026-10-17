@@ -37,10 +37,12 @@ import {
 import { cn } from '../../../lib/utils'
 import useEditor, { type GridSnapStep } from '../../../store/use-editor'
 import useFenceCurveDraft from '../../../store/use-fence-curve-draft'
+import useMeasureSnapSettings from '../../../store/use-measure-snap-settings'
 import useHudPreferences, { type HudPosition } from '../../../store/use-hud-preferences'
 import { IconRefGlyph } from '../icon-ref'
 import { Checkbox } from '../primitives/checkbox'
 import { ShortcutToken } from '../primitives/shortcut-token'
+import { Switch } from '../primitives/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
 import { useInRightStack } from '../right-stack'
 
@@ -272,6 +274,68 @@ function SnappingChips({ context }: { context: SnapContext }) {
         />
       ) : null}
     </>
+  )
+}
+
+// AIKAZA: what the measure tool snaps to, switched live while measuring.
+const MEASURE_SNAP_TOGGLES = [
+  { key: 'corners', label: 'Corners', tooltip: 'Snap to wall corners' },
+  { key: 'faces', label: 'Wall faces', tooltip: 'Snap to wall faces' },
+  { key: 'squareUp', label: 'Square up', tooltip: 'Land level or plumb with the previous point' },
+  { key: 'diagonals', label: '45°', tooltip: 'Also offer 45° lines from the previous point' },
+  { key: 'align', label: 'Align', tooltip: 'Line up with the measure’s own points' },
+] as const
+
+const STRENGTH_OPTIONS = [
+  { value: 'gentle', label: 'Gentle' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'strong', label: 'Strong' },
+] as const
+
+function MeasureSnapChips() {
+  const settings = useMeasureSnapSettings()
+  return (
+    <div className="pointer-events-auto col-span-2 mt-0.5 flex flex-col gap-1.5">
+      <div className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">
+        Snapping
+      </div>
+      {MEASURE_SNAP_TOGGLES.map(({ key, label, tooltip }) => (
+        <label
+          className="flex cursor-pointer items-center justify-between gap-3 text-foreground/90 text-xs"
+          key={key}
+          title={tooltip}
+        >
+          <span>{label}</span>
+          <Switch
+            aria-label={label}
+            checked={settings[key]}
+            className="scale-90"
+            onCheckedChange={() => settings.toggle(key)}
+          />
+        </label>
+      ))}
+      <div className="flex items-center justify-between gap-3 text-foreground/90 text-xs">
+        <span title="How far snaps reach">Strength</span>
+        <div className="flex rounded-md bg-white/5 p-0.5">
+          {STRENGTH_OPTIONS.map(({ value, label }) => (
+            <button
+              aria-pressed={settings.strength === value}
+              className={cn(
+                'rounded px-1.5 py-0.5 text-[11px] transition-colors',
+                settings.strength === value
+                  ? 'bg-[var(--toggle-on,var(--primary))] text-white'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+              key={value}
+              onClick={() => settings.setStrength(value)}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -625,7 +689,7 @@ const hintKey = (hint: ContextualShortcutHint) => `${hint.keys.join('+')}:${hint
 export function ContextualHelperPanel({
   hints,
   chipHints = [],
-  snapContext = null,
+  snapContext: snapContextProp = null,
   showPaintScope = false,
   continuationContext = null,
   title = null,
@@ -654,7 +718,18 @@ export function ContextualHelperPanel({
   const [cardEl, setCardEl] = useState<HTMLDivElement | null>(null)
   const { position, onPointerDown } = useHudDrag(cardRef, cardEl, collapsed)
   const modeChips = chipHints.filter((hint) => hint.chip)
-  const hasChips = !!snapContext || !!continuationContext || modeChips.length > 0 || showPaintScope
+  const measuring = useEditor(
+    (state) =>
+      state.mode === 'build' &&
+      state.tool === 'measurement' &&
+      state.toolDefaults.measurement?.kind !== 'smart' &&
+      // The options steer the floor plan's measure tool, not the 3D one.
+      state.viewMode !== '3d',
+  )
+  // The measure tool snaps by its own chips; the drawing snap mode doesn't apply to it.
+  const snapContext = measuring ? null : snapContextProp
+  const hasChips =
+    !!snapContext || !!continuationContext || modeChips.length > 0 || showPaintScope || measuring
   const panelKey = title?.label ?? hints.map(hintKey).join('|')
   // A plain close lasts while this tool or gesture is in hand.
   useEffect(() => {
@@ -731,6 +806,7 @@ export function ContextualHelperPanel({
         <div className="col-span-2 my-0.5 h-px bg-border" />
       ) : null}
       {snapContext ? <SnappingChips context={snapContext} /> : null}
+      {measuring ? <MeasureSnapChips /> : null}
       {continuationContext === 'fence' ? <FenceContinuationChips /> : null}
       {continuationContext && continuationContext !== 'fence' ? (
         <ContinuationChip context={continuationContext} />
