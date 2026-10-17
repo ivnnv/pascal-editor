@@ -47,6 +47,6 @@ export const separatorDefinition: NodeDefinition<typeof SeparatorNode> = {
     icon: { kind: 'iconify', name: 'lucide:split' },
     label: 'Separator',
     hidden: true,
-    actionMenu: false,
+    actionMenu: true,
   },
 }
