@@ -960,6 +960,7 @@ export { useFloorplanDraftPreview } from './store/use-floorplan-draft-preview'
 export { default as useFloorplanMode } from './store/use-floorplan-mode'
 export { default as useFloorplanPreferences } from './store/use-floorplan-preferences'
 export { default as useFollowPascal } from './store/use-follow-pascal'
+export { default as useHudPreferences } from './store/use-hud-preferences'
 export {
   default as useInteractionScope,
   getEditingHole,
@@ -973,6 +974,7 @@ export {
   useReshapingNode,
 } from './store/use-interaction-scope'
 export { default as useJointAngle } from './store/use-joint-angle'
+export { default as useMeasureSnapSettings } from './store/use-measure-snap-settings'
 export {
   commitMeasurementDraft,
   finishMeasurementDraft,
