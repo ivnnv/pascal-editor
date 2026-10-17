@@ -3,6 +3,7 @@
 import { useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { motion } from 'motion/react'
+import { useRef } from 'react'
 import { TooltipProvider } from './../../../components/ui/primitives/tooltip'
 import { useIsMobile } from './../../../hooks/use-mobile'
 import { useReducedMotion } from './../../../hooks/use-reduced-motion'
@@ -14,6 +15,7 @@ import { ControlModes } from './control-modes'
 import { FollowPascalPill } from './follow-pascal-pill'
 import { type ActionMenuPlacement, ActionMenuPlacementProvider } from './placement'
 import { PlacementControl } from './placement-control'
+import { useTopDockShift } from './top-dock-fit'
 import { SecondaryToggles } from './view-toggles'
 
 // Mobile bottom offset matches the viewer's overlap behind the sheet's
@@ -40,6 +42,8 @@ export function ActionMenu({
     (s) => isMobile && CONTEXTUAL_TABS.has(s.activeSidebarPanel),
   )
   const reducedMotion = useReducedMotion()
+  const menuRef = useRef<HTMLDivElement>(null)
+  const topDockShift = useTopDockShift(menuRef, placement === 'top' && !isMobile)
 
   // On mobile, defer the bottom rail to the selection bar when something
   // is selected — the contextual actions take priority over mode controls.
@@ -86,8 +90,14 @@ export function ActionMenu({
             'transition-colors duration-200 ease-out',
             className,
           )}
+          data-action-menu=""
           layout
-          style={isMobile ? { bottom: MOBILE_BOTTOM_OFFSET } : undefined}
+          ref={menuRef}
+          style={
+            isMobile
+              ? { bottom: MOBILE_BOTTOM_OFFSET }
+              : { x: topDockShift.x, y: topDockShift.y }
+          }
           transition={transition}
         >
           {isMobile ? (

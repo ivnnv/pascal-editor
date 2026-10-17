@@ -4,10 +4,12 @@ import { type OpenWallEnd, sceneRegistry } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
+import { X } from 'lucide-react'
 import { memo, useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, CircleGeometry, type Group, RingGeometry } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import {
+  dismissOpenWallEnds,
   useOpenWallEndFocus,
   useOpenWallEnds,
   useOpenWallEndsSuppressed,
@@ -237,10 +239,24 @@ function OpenWallEndMarker3D({
             ) : null}
             {label ? (
               <div
-                className="whitespace-nowrap rounded-[3px] px-[5px] py-[2px] font-medium font-sans text-[11px] text-white"
+                className="flex items-center gap-1 whitespace-nowrap rounded-[3px] py-[2px] pr-[2px] pl-[5px] font-medium font-sans text-[11px] text-white"
                 style={{ backgroundColor: MEASUREMENT_DANGLING_COLOR }}
               >
                 {label}
+                <button
+                  aria-label="Dismiss"
+                  className="pointer-events-auto flex h-3.5 w-3.5 cursor-pointer items-center justify-center rounded-sm hover:bg-white/20"
+                  data-open-wall-end=""
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    dismissOpenWallEnds([end])
+                  }}
+                  onPointerDown={stop}
+                  onPointerUp={stop}
+                  type="button"
+                >
+                  <X aria-hidden className="h-2.5 w-2.5" strokeWidth={3} />
+                </button>
               </div>
             ) : null}
           </div>

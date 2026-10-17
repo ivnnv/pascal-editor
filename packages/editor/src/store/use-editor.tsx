@@ -532,6 +532,9 @@ type EditorState = {
   setContinuation: (context: ContinuationContext, mode: ContinuationMode) => void
   cycleContinuation: (context: ContinuationContext) => ContinuationMode
   getContinuation: (context: ContinuationContext) => ContinuationMode
+  /** Open wall end markers, labels and hint in the floor plan and 3D view. */
+  showOpenWallEnds: boolean
+  setShowOpenWallEnds: (show: boolean) => void
   showReferenceFloor: boolean
   toggleReferenceFloor: () => void
   setShowReferenceFloor: (show: boolean) => void
@@ -615,6 +618,7 @@ type PersistedEditorLayoutState = Pick<
   | 'lastMeasurementKind'
   | 'snappingModeByContext'
   | 'continuationByContext'
+  | 'showOpenWallEnds'
   | 'showReferenceFloor'
   | 'referenceFloorOffset'
   | 'referenceFloorOpacity'
@@ -652,6 +656,7 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
     cabinet: CONTINUATION_PROFILES.cabinet.default,
     canopy: CONTINUATION_PROFILES.canopy.default,
   },
+  showOpenWallEnds: true,
   showReferenceFloor: false,
   referenceFloorOffset: 1,
   referenceFloorOpacity: 0.35,
@@ -910,6 +915,7 @@ export function normalizePersistedEditorLayoutState(
       rotation: migrateSnappingMode(state?.snappingModeByContext?.rotation, 'rotation'),
     },
     continuationByContext: normalizeContinuationByContext(state),
+    showOpenWallEnds: state?.showOpenWallEnds !== false,
     showReferenceFloor: state?.showReferenceFloor === true,
     referenceFloorOffset:
       typeof state?.referenceFloorOffset === 'number' && state.referenceFloorOffset >= 1
@@ -1583,6 +1589,8 @@ const useEditor = create<EditorState>()(
         const current = get().continuationByContext[context]
         return migrateContinuationMode(current, context) ?? CONTINUATION_PROFILES[context].default
       },
+      showOpenWallEnds: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showOpenWallEnds,
+      setShowOpenWallEnds: (show) => set({ showOpenWallEnds: show }),
       showReferenceFloor: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showReferenceFloor,
       toggleReferenceFloor: () =>
         set((state) => ({ showReferenceFloor: !state.showReferenceFloor })),
@@ -1696,6 +1704,7 @@ const useEditor = create<EditorState>()(
         lastMeasurementKind: state.lastMeasurementKind,
         snappingModeByContext: state.snappingModeByContext,
         continuationByContext: state.continuationByContext,
+        showOpenWallEnds: state.showOpenWallEnds,
         showReferenceFloor: state.showReferenceFloor,
         referenceFloorOffset: state.referenceFloorOffset,
         referenceFloorOpacity: state.referenceFloorOpacity,

@@ -25,8 +25,10 @@ import {
   Sparkles,
   Square,
   SwatchBook,
+  Unlink,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
+import useEditor from '../../store/use-editor'
 import { ActionButton } from '../ui/action-menu/action-button'
 import { FollowPascalToggle } from '../ui/action-menu/follow-pascal-toggle'
 import {
@@ -152,6 +154,7 @@ function DisplayMenu() {
   const shadows = useViewer((s) => s.shadows)
   const sceneTheme = useViewer((s) => s.sceneTheme)
   const edges = useViewer((s) => s.edges)
+  const showOpenWallEnds = useEditor((s) => s.showOpenWallEnds)
   const activeShading = SHADING_OPTIONS.find((o) => o.id === shading) ?? SHADING_OPTIONS[0]
   const activeTheme = getSceneTheme(sceneTheme)
   const activeEdges = EDGE_OPTIONS.find((o) => o.id === edges) ?? EDGE_OPTIONS[0]
@@ -199,6 +202,17 @@ function DisplayMenu() {
           <span>Colors</span>
           <span className="ml-auto text-muted-foreground text-xs">
             {textures ? 'Colored' : 'Monochrome'}
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(e) =>
+            keepOpen(e, () => useEditor.getState().setShowOpenWallEnds(!showOpenWallEnds))
+          }
+        >
+          <Unlink className="h-4 w-4" />
+          <span>Open wall ends</span>
+          <span className="ml-auto text-muted-foreground text-xs">
+            {showOpenWallEnds ? 'On' : 'Off'}
           </span>
         </DropdownMenuItem>
 

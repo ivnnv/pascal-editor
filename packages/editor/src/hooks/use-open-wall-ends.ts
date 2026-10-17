@@ -3,6 +3,7 @@
 import { type AnyNode, findOpenWallEnds, type OpenWallEnd, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import {
   collapseMutualOpenWallEnds,
@@ -51,6 +52,25 @@ export function analyseOpenWallEnds(levelId: string, nodes: readonly AnyNode[]):
   return ends
 }
 
+const endPosition = (end: OpenWallEnd) => `${end.point[0]},${end.point[1]}`
+
+/**
+ * Ends dismissed this session, keyed by end with the position they were
+ * dismissed at: an end that moves shows again.
+ */
+const useDismissedOpenWallEnds = create<{ dismissed: Record<string, string> }>(() => ({
+  dismissed: {},
+}))
+
+export function dismissOpenWallEnds(ends: readonly OpenWallEnd[]): void {
+  useDismissedOpenWallEnds.setState((state) => ({
+    dismissed: {
+      ...state.dismissed,
+      ...Object.fromEntries(ends.map((end) => [openWallEndKey(end), endPosition(end)])),
+    },
+  }))
+}
+
 /** Moving, placing, reshaping or dragging a handle: the markers step aside. */
 export function useOpenWallEndsSuppressed(): boolean {
   return useInteractionScope(
@@ -87,6 +107,8 @@ export function useOpenWallEnds(): OpenWallEndsState {
   const spaces = useEditor(
     useShallow((state) => Object.values(state.spaces).filter((space) => space.levelId === levelId)),
   )
+  const enabled = useEditor((state) => state.showOpenWallEnds)
+  const dismissed = useDismissedOpenWallEnds((state) => state.dismissed)
   const isDividing = useInteractionScope((state) => state.scope.kind === 'room-divide')
   const dividingDraft = useInteractionScope(
     (state) => state.scope.kind === 'room-divide' && state.scope.points.length > 0,
@@ -132,7 +154,7 @@ export function useOpenWallEnds(): OpenWallEndsState {
     [boundaries, roomWallIds],
   )
   const hasWalls = boundaries.some((node) => node.type === 'wall')
-  const shouldAnalyse = !!levelId && hasWalls && (drawing || roomlessWallIds.length > 0)
+  const shouldAnalyse = enabled && !!levelId && hasWalls && (drawing || roomlessWallIds.length > 0)
   const openEnds = useMemo(
     () => (shouldAnalyse && levelId ? analyseOpenWallEnds(levelId, analysisNodes) : NO_ENDS),
     [shouldAnalyse, levelId, analysisNodes],
@@ -147,15 +169,15 @@ export function useOpenWallEnds(): OpenWallEndsState {
           ? [wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]]
           : null
       },
-    )
-  }, [openEnds, roomWallIds, drawing, boundaries])
+    ).filter((end) => dismissed[openWallEndKey(end)] !== endPosition(end))
+  }, [openEnds, roomWallIds, drawing, boundaries, dismissed])
 
   return {
     drawing,
     drafting: wallDrafting || dividingDraft,
     ends,
     roomlessWallIds,
-    shown: drawing || ends.length > 0,
+    shown: enabled && (drawing || ends.length > 0),
   }
 }
 

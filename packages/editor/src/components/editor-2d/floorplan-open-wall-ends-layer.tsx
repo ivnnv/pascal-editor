@@ -2,9 +2,10 @@
 
 import type { OpenWallEnd } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { memo, useEffect, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  dismissOpenWallEnds,
   useOpenWallEndFocus,
   useOpenWallEnds,
   useOpenWallEndsSuppressed,
@@ -25,6 +26,51 @@ function sceneScreenPoint(point: [number, number]): { left: number; top: number 
   if (!(svg && ctm)) return null
   const screen = new DOMPoint(point[0], point[1]).matrixTransform(ctm)
   return { left: screen.x, top: screen.y }
+}
+
+const LABEL_HEIGHT_PX = 16
+const LABEL_RAISE_PX = 18
+
+/** Where an end's label sits: midway to the wall it nearly meets, else on the end. */
+function labelAnchorOf(end: OpenWallEnd): [number, number] {
+  const [x, z] = end.point
+  const candidate = end.candidate
+  return candidate ? [(x + candidate.point[0]) / 2, (z + candidate.point[1]) / 2] : [x, z]
+}
+
+/**
+ * Extra lift in pixels per end so labels of nearby ends stack instead of
+ * covering each other. Boxes are compared upright on screen, like the labels.
+ */
+function stackLabels(
+  labelled: { key: string; end: OpenWallEnd; label: string }[],
+  sceneRotationDeg: number,
+  upp: number,
+): Map<string, number> {
+  const rad = (sceneRotationDeg * Math.PI) / 180
+  const cos = Math.cos(rad)
+  const sin = Math.sin(rad)
+  const placed: { x: number; y: number; halfWidth: number }[] = []
+  const lifts = new Map<string, number>()
+  for (const { key, end, label } of labelled) {
+    const [ax, az] = labelAnchorOf(end)
+    const x = (ax * cos - az * sin) / upp
+    const baseY = (ax * sin + az * cos) / upp - LABEL_RAISE_PX
+    const halfWidth = (label.length * 6.2 + 23) / 2
+    let lift = 0
+    while (
+      placed.some(
+        (box) =>
+          Math.abs(box.x - x) < box.halfWidth + halfWidth &&
+          Math.abs(box.y - (baseY - lift)) < LABEL_HEIGHT_PX + 2,
+      )
+    ) {
+      lift += LABEL_HEIGHT_PX + 3
+    }
+    placed.push({ x, y: baseY - lift, halfWidth })
+    lifts.set(key, lift)
+  }
+  return lifts
 }
 
 /**
@@ -48,11 +94,17 @@ const ActiveOpenWallEndsLayer = memo(function ActiveOpenWallEndsLayer() {
   const { drawing, drafting, ends: visibleEnds, roomlessWallIds, shown } = useOpenWallEnds()
   const focus = useOpenWallEndFocus(visibleEnds, drafting)
   const { activeEnd, activeKey } = focus
+  const selectedIds = useViewer((state) => state.selection.selectedIds)
 
   if (!shown) return null
 
   const unitsPerPixel = Math.max(renderContext?.unitsPerPixel ?? 0.01, 1e-6)
   const sceneRotationDeg = renderContext?.sceneRotationDeg ?? 0
+  const labelled = visibleEnds.flatMap((end) => {
+    const label = openWallEndLabel(end, unit)
+    return label ? [{ key: openWallEndKey(end), end, label }] : []
+  })
+  const lifts = stackLabels(labelled, sceneRotationDeg, unitsPerPixel)
   return (
     <g data-open-wall-ends-layer="">
       {drawing && roomlessWallIds.length > 0 ? (
@@ -71,9 +123,11 @@ const ActiveOpenWallEndsLayer = memo(function ActiveOpenWallEndsLayer() {
           <OpenWallEndMarker
             active={key === activeKey}
             end={end}
-            interactive={!!end.candidate && !drafting}
+            // A selected wall's end handle sits under the dot: let it take the drag.
+            interactive={!!end.candidate && !drafting && !selectedIds.includes(end.wallId)}
             key={key}
             label={openWallEndLabel(end, unit)}
+            labelLift={lifts.get(key) ?? 0}
             onHoverEnd={focus.releaseHover}
             onHoverStart={() => focus.keepHover(key)}
             onPin={() => focus.togglePin(key)}
@@ -100,6 +154,7 @@ function OpenWallEndMarker({
   active,
   end,
   label,
+  labelLift,
   interactive,
   onHoverEnd,
   onHoverStart,
@@ -110,6 +165,7 @@ function OpenWallEndMarker({
   active: boolean
   end: OpenWallEnd
   label: string | null
+  labelLift: number
   interactive: boolean
   onHoverEnd: () => void
   onHoverStart: () => void
@@ -119,9 +175,6 @@ function OpenWallEndMarker({
 }) {
   const [x, z] = end.point
   const candidate = end.candidate
-  const labelAnchor = candidate
-    ? [(x + candidate.point[0]) / 2, (z + candidate.point[1]) / 2]
-    : [x, z]
   const stop = (event: { stopPropagation: () => void }) => event.stopPropagation()
 
   return (
@@ -174,14 +227,16 @@ function OpenWallEndMarker({
         onPointerEnter={interactive ? onHoverStart : undefined}
         onPointerLeave={interactive ? onHoverEnd : undefined}
         onPointerUp={stop}
-        pointerEvents={interactive ? 'all' : 'none'}
+        pointerEvents={interactive ? 'fill' : 'none'}
         r={11 * upp}
         role="button"
         style={{ cursor: 'pointer' }}
       />
       {label ? (
         <OpenWallEndLabel
-          point={labelAnchor as [number, number]}
+          lift={labelLift}
+          onDismiss={() => dismissOpenWallEnds([end])}
+          point={labelAnchorOf(end)}
           sceneRotationDeg={sceneRotationDeg}
           text={label}
           unitsPerPixel={upp}
@@ -192,11 +247,15 @@ function OpenWallEndMarker({
 }
 
 function OpenWallEndLabel({
+  lift,
+  onDismiss,
   point,
   sceneRotationDeg,
   text,
   unitsPerPixel: upp,
 }: {
+  lift: number
+  onDismiss: () => void
   point: [number, number]
   sceneRotationDeg: number
   text: string
@@ -204,13 +263,25 @@ function OpenWallEndLabel({
 }) {
   const fontSize = 10 * upp
   const padX = 6 * upp
-  const width = text.length * 5.6 * upp + padX * 2
-  const height = fontSize + 6 * upp
+  const gap = 4 * upp
+  const closeWidth = 8 * upp
+  const textRef = useRef<SVGTextElement>(null)
+  const [measuredWidth, setMeasuredWidth] = useState<number | null>(null)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: remeasure when the text or zoom changes
+  useLayoutEffect(() => {
+    setMeasuredWidth(textRef.current?.getComputedTextLength() ?? null)
+  }, [text, fontSize])
+  const textWidth = measuredWidth ?? text.length * 6.2 * upp
+  const width = padX + textWidth + gap + closeWidth + padX * 0.75
+  const height = LABEL_HEIGHT_PX * upp
+  const closeX = width / 2 - padX * 0.75 - closeWidth / 2
+  const arm = 2.5 * upp
+  const stop = (event: { stopPropagation: () => void }) => event.stopPropagation()
   const angle = resolveFloorplanLabelAngle(0, sceneRotationDeg, true)
   return (
     <g
       pointerEvents="none"
-      transform={`translate(${point[0]} ${point[1]}) rotate(${angle}) translate(0 ${-18 * upp})`}
+      transform={`translate(${point[0]} ${point[1]}) rotate(${angle}) translate(0 ${-(LABEL_RAISE_PX + lift) * upp})`}
     >
       <rect
         fill="#ffffff"
@@ -229,10 +300,35 @@ function OpenWallEndLabel({
         fontFamily="system-ui, -apple-system, sans-serif"
         fontSize={fontSize}
         fontWeight="600"
-        textAnchor="middle"
+        ref={textRef}
+        textAnchor="start"
+        x={-width / 2 + padX}
       >
         {text}
       </text>
+      <path
+        d={`M ${closeX - arm} ${-arm} L ${closeX + arm} ${arm} M ${closeX + arm} ${-arm} L ${closeX - arm} ${arm}`}
+        stroke={MEASUREMENT_DANGLING_COLOR}
+        strokeLinecap="round"
+        strokeWidth={1.25 * upp}
+      />
+      <circle
+        aria-label="Dismiss"
+        cx={closeX}
+        cy={0}
+        data-open-wall-end=""
+        fill="transparent"
+        onClick={(event) => {
+          event.stopPropagation()
+          onDismiss()
+        }}
+        onPointerDown={stop}
+        onPointerUp={stop}
+        pointerEvents="fill"
+        r={height / 2}
+        role="button"
+        style={{ cursor: 'pointer' }}
+      />
     </g>
   )
 }

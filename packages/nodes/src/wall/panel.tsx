@@ -51,6 +51,7 @@ import {
   PanelWrapper,
   SegmentedControl,
   SliderControl,
+  ToggleControl,
   triggerSFX,
   useInteractionScope,
   WallPaintRegionList,
@@ -284,6 +285,14 @@ export default function WallPanel() {
           ]}
           value={node.wallType ?? 'standard'}
         />
+        <ToggleControl
+          checked={node.freeStanding ?? false}
+          label="Free-standing"
+          onChange={(checked) => handleUpdate({ freeStanding: checked })}
+        />
+        <div className="px-1 text-[11px] text-muted-foreground">
+          Its open ends are expected and never flagged as not joined.
+        </div>
       </PanelSection>
       <PanelSection title="Dimensions">
         <SliderControl
