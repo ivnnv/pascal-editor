@@ -107,22 +107,8 @@ export function buildMeasurementFloorplan(
           { kind: 'line', x1, y1, x2, y2, ...style },
           { kind: 'hit-line', x1, y1, x2, y2, strokeWidthPx: 12 },
           ...collapsedHitTarget,
-          {
-            kind: 'circle',
-            cx: x1,
-            cy: y1,
-            r: 0.045,
-            fill: stroke,
-            pointerEvents: 'none',
-          },
-          {
-            kind: 'circle',
-            cx: x2,
-            cy: y2,
-            r: 0.045,
-            fill: stroke,
-            pointerEvents: 'none',
-          },
+          endpointDot(x1, y1, stroke),
+          endpointDot(x2, y2, stroke),
           {
             kind: 'dimension-label',
             appearance: 'outlined',
@@ -260,4 +246,20 @@ export function buildMeasurementFloorplan(
     { kind: 'group', children },
     { annotationRole: 'measurement' },
   )
+}
+
+/** A dot of fixed size on screen: a zero-length line with round caps and a non-scaling stroke. */
+function endpointDot(x: number, y: number, color: string): FloorplanGeometry {
+  return {
+    kind: 'line',
+    x1: x,
+    y1: y,
+    x2: x,
+    y2: y,
+    stroke: color,
+    strokeWidth: 7,
+    strokeLinecap: 'round',
+    vectorEffect: 'non-scaling-stroke',
+    pointerEvents: 'none',
+  }
 }

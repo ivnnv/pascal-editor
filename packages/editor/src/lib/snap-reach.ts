@@ -23,3 +23,21 @@ export function setPlanSnapScale(metresPerPixel: number | null) {
 export function getPlanSnapScale(): number | null {
   return planMetresPerPixel
 }
+
+// The zoom (metres per pixel) the pixel reaches were tuned at; past it they shrink.
+const SNAP_REACH_TUNED_METRES_PER_PIXEL = 0.01
+const MIN_ZOOM_REACH_SCALE = 0.3
+
+/** 1 at the tuned zoom or further out, less zoomed in, so fine moves get through a snap. */
+export function zoomSnapReachScale(metresPerPixel: number | null): number {
+  if (!metresPerPixel) return 1
+  return Math.min(
+    1,
+    Math.max(MIN_ZOOM_REACH_SCALE, metresPerPixel / SNAP_REACH_TUNED_METRES_PER_PIXEL),
+  )
+}
+
+/** A pixel reach as metres at this zoom, never past `maxMetres`. */
+export function planSnapReach(px: number, metresPerPixel: number, maxMetres: number): number {
+  return Math.min(maxMetres, px * metresPerPixel * zoomSnapReachScale(metresPerPixel))
+}

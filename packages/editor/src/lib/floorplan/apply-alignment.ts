@@ -6,6 +6,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import useAlignmentGuides from '../../store/use-alignment-guides'
+import { getPlanSnapScale, planSnapReach } from '../snap-reach'
 import { resolveAlignmentForFloorplanView } from '../world-grid-snap'
 
 /**
@@ -15,6 +16,17 @@ import { resolveAlignmentForFloorplanView } from '../world-grid-snap'
  * constant in screen pixels across zoom levels.
  */
 export const FLOORPLAN_ALIGNMENT_THRESHOLD_M = 0.08
+
+// The alignment pull in screen pixels: 8 cm at the zoom it was tuned at.
+const ALIGNMENT_REACH_PX = 8
+
+/** The alignment pull at the plan's zoom, never past `FLOORPLAN_ALIGNMENT_THRESHOLD_M`. */
+export function floorplanAlignmentThreshold(): number {
+  const metresPerPixel = getPlanSnapScale()
+  return metresPerPixel
+    ? planSnapReach(ALIGNMENT_REACH_PX, metresPerPixel, FLOORPLAN_ALIGNMENT_THRESHOLD_M)
+    : FLOORPLAN_ALIGNMENT_THRESHOLD_M
+}
 
 export type FloorplanAlignmentResult = {
   /** Plan point with the alignment snap delta applied (grid snap should
@@ -53,7 +65,7 @@ export function applyFloorplanAlignment(
   const result = resolveAlignmentForFloorplanView({
     moving: movingAnchors,
     candidates,
-    threshold: opts?.threshold ?? FLOORPLAN_ALIGNMENT_THRESHOLD_M,
+    threshold: opts?.threshold ?? floorplanAlignmentThreshold(),
   })
 
   useAlignmentGuides.getState().set(result.guides)

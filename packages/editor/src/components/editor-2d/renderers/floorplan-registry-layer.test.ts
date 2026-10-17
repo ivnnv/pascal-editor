@@ -30,6 +30,7 @@ import {
   isFloorplanHierarchyVisible,
   isFloorplanOpeningPlacementState,
   resolveFloorplanHandleUnitsPerPixel,
+  resolveFloorplanWorldHandleScale,
   siteToFloorplanTransform,
   splitFloorplanHandles,
   splitFloorplanOverlay,
@@ -857,5 +858,16 @@ describe('the handles pass', () => {
       },
     } as never)
     expect(splitFloorplanHandles(label)).toEqual({ rest: label, handles: null })
+  })
+})
+
+describe('resolveFloorplanWorldHandleScale', () => {
+  test('the metre-sized arrows keep their size up to the tuned zoom', () => {
+    expect(resolveFloorplanWorldHandleScale(0.01)).toBe(1)
+    expect(resolveFloorplanWorldHandleScale(0.05)).toBe(1)
+  })
+
+  test('zoomed in they shrink with the zoom, so they stay the same size on screen', () => {
+    expect(resolveFloorplanWorldHandleScale(0.0025)).toBeCloseTo(0.25)
   })
 })

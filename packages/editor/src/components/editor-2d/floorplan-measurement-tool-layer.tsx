@@ -47,6 +47,7 @@ import {
   MEASUREMENT_ACTIVE_COLOR,
   metersToLinearUnit,
 } from '../../lib/measurements'
+import { zoomSnapReachScale } from '../../lib/snap-reach'
 import { clearSurfacePlanSnapFeedback } from '../../lib/surface-plan-snap'
 import useEditor from '../../store/use-editor'
 import useMeasureSnapSettings, {
@@ -989,7 +990,8 @@ export function FloorplanMeasurementToolLayer() {
       const groupMatrix = group.getScreenCTM()
       const pixelsPerMetre = groupMatrix ? Math.hypot(groupMatrix.a, groupMatrix.b) : 100
       const settings = useMeasureSnapSettings.getState()
-      const reachScale = MEASURE_SNAP_STRENGTH_SCALE[settings.strength]
+      const reachScale =
+        MEASURE_SNAP_STRENGTH_SCALE[settings.strength] * zoomSnapReachScale(1 / pixelsPerMetre)
       const target = event.altKey
         ? null
         : resolveMeasureSnap(
