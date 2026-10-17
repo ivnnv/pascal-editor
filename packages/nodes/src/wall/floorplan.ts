@@ -40,12 +40,6 @@ import {
 import { buildCurtainWallFloorplan } from './curtain-wall-floorplan'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
 
-// Same constants the legacy `getFloorplanWall` uses (editor/lib/floorplan/walls.ts).
-// Slightly exaggerates thin walls so the 2D plan stays legible without
-// drifting from BIM data. Inlined to keep nodes/wall self-contained.
-const FLOORPLAN_WALL_THICKNESS_SCALE = 1.18
-const FLOORPLAN_MIN_VISIBLE_WALL_THICKNESS = 0.13
-const FLOORPLAN_MAX_EXTRA_THICKNESS = 0.035
 const FLOORPLAN_SELECTION_HATCH_SPACING = 0.12
 const FLOORPLAN_SELECTED_WALL_STROKE_WIDTH = 0.03
 const FLOORPLAN_SELECTION_HATCH_STROKE_WIDTH = 0.02
@@ -53,13 +47,9 @@ const WALL_DIMENSION_REFERENCES = ['finished-faces', 'centerline', 'stud-faces']
 
 type WallDimensionReference = (typeof WALL_DIMENSION_REFERENCES)[number]
 
+/** The wall's true thickness: its drawn faces are where measures and snaps land. */
 function floorplanWallThickness(wall: WallNode): number {
-  const baseThickness = getWallThickness(wall)
-  const scaledThickness = baseThickness * FLOORPLAN_WALL_THICKNESS_SCALE
-  return Math.min(
-    baseThickness + FLOORPLAN_MAX_EXTRA_THICKNESS,
-    Math.max(baseThickness, scaledThickness, FLOORPLAN_MIN_VISIBLE_WALL_THICKNESS),
-  )
+  return getWallThickness(wall)
 }
 
 /** Footprints of the walls sharing an end with `wall`, to find its exposed edges. */
@@ -111,6 +101,8 @@ export type WallFloorplanLevelData = {
 // and a curved wall's layers would need arc offsets. Stated plainly rather
 // than approximated — a curved wall draws exactly as it does today.
 const LAYER_LINE_STROKE = '#1f2937'
+// A hairline on screen, so the edge marks the real face without widening the wall.
+const WALL_EDGE_STROKE_PX = 1
 const LAYER_LINE_WIDTH_DOCUMENT = 0.008
 const LAYER_LINE_WIDTH_EDIT = 0.006
 const LAYER_LINE_OPACITY_EDIT = 0.35
@@ -371,7 +363,8 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       points,
       fill,
       stroke: outline ? 'none' : stroke,
-      strokeWidth: showSelectedChrome ? FLOORPLAN_SELECTED_WALL_STROKE_WIDTH : 0.02,
+      strokeWidth: showSelectedChrome ? FLOORPLAN_SELECTED_WALL_STROKE_WIDTH : WALL_EDGE_STROKE_PX,
+      ...(showSelectedChrome ? {} : { vectorEffect: 'non-scaling-stroke' as const }),
       // A mitred corner's sharp vertex would spike the stroke past the wall.
       strokeLinejoin: 'round',
       opacity: outline ? 1 : 0.92,
@@ -391,7 +384,8 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       d: outline.map(([from, to]) => `M${from!.x} ${from!.y}L${to!.x} ${to!.y}`).join(''),
       fill: 'none',
       stroke,
-      strokeWidth: 0.02,
+      strokeWidth: WALL_EDGE_STROKE_PX,
+      vectorEffect: 'non-scaling-stroke',
       // Square ends close the outer corner where two walls' faces meet.
       strokeLinecap: 'square',
       pointerEvents: 'none',

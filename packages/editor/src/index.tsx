@@ -660,6 +660,7 @@ export {
   hasActivePaintMaterial,
 } from './lib/material-paint'
 export { useMaterialPaintPanelModel } from './lib/material-paint-panel-model'
+export { resolveLevelMeasureSnap } from './lib/measure-snap-level'
 export {
   CREATABLE_MEASUREMENT_KINDS,
   type CreatableMeasurementKind,
