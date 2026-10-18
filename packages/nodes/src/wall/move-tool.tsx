@@ -468,7 +468,8 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
           getActiveSnappingMode() === 'off'
             ? rawOffset
             : snapWallMove({
-                wall: snapWallRef.current,
+                // Its lines as the wall now stands, rotation included.
+                wall: { ...snapWallRef.current, ...buildWallFromCenter(originalCenter) },
                 axis,
                 rawOffset,
                 targets: snapTargetsRef.current,

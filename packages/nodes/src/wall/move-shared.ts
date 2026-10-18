@@ -228,13 +228,19 @@ export function planSidewaysMoveRejoins(
   changes: WallTopologyChanges,
 ): WallTopologyChanges {
   const all = planWallEndRejoins(nodes, wallIds, radius, changes)
-  const original = nodes[wallId]
+  const node = nodes[wallId]
   const moved = all.update.find((entry) => entry.id === wallId)?.data as
     | Partial<WallNode>
     | undefined
-  if (original?.type !== 'wall' || !moved?.start || !moved.end) return all
-  const ox = original.end[0] - original.start[0]
-  const oz = original.end[1] - original.start[1]
+  if (node?.type !== 'wall' || !moved?.start || !moved.end) return all
+  // The wall as the move asked for it, before any rejoin touched it.
+  const asked = changes.update.find((entry) => entry.id === wallId)?.data as
+    | Partial<WallNode>
+    | undefined
+  const askedStart = asked?.start ?? node.start
+  const askedEnd = asked?.end ?? node.end
+  const ox = askedEnd[0] - askedStart[0]
+  const oz = askedEnd[1] - askedStart[1]
   const mx = moved.end[0] - moved.start[0]
   const mz = moved.end[1] - moved.start[1]
   const turn = Math.abs(ox * mz - oz * mx) / (Math.hypot(ox, oz) * Math.hypot(mx, mz) || 1)

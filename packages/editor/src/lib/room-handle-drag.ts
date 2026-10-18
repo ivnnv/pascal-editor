@@ -963,7 +963,10 @@ export function runWallPushDrag({
   const toDistance = (at: number | null) => {
     if (at === null) return null
     const raw = at - from
-    if (getActiveSnappingMode() === 'off') return raw
+    if (getActiveSnappingMode() === 'off') {
+      showPushSnap(null)
+      return raw
+    }
     const metresPerPixel = getPlanSnapScale()
     const reach = metresPerPixel
       ? planSnapReach(PUSH_ALIGN_REACH_PX, metresPerPixel, PUSH_ALIGN_MAX)
