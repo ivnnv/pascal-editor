@@ -19,22 +19,34 @@ export const separatorDefinition: NodeDefinition<typeof SeparatorNode> = {
   dirtyTracking: false,
   rendersChildren: false,
   renderer: { kind: 'parametric', module: () => import('./renderer') },
-  floorplan: (node) => ({
-    kind: 'line',
-    x1: node.start[0],
-    y1: node.start[1],
-    x2: node.end[0],
-    y2: node.end[1],
-    stroke: '#818cf8',
-    strokeWidth: 2,
-    strokeDasharray: '6 4',
-    vectorEffect: 'non-scaling-stroke',
-    pointerEvents: 'stroke',
-  }),
+  floorplan: (node, ctx) => {
+    const [x1, y1] = node.start
+    const [x2, y2] = node.end
+    const selected = ctx.viewState?.selected === true
+    return {
+      kind: 'group',
+      children: [
+        {
+          kind: 'line',
+          x1,
+          y1,
+          x2,
+          y2,
+          stroke: selected ? (ctx.viewState?.palette?.selectedStroke ?? '#818cf8') : '#818cf8',
+          strokeWidth: selected ? 3 : 2,
+          strokeDasharray: '6 4',
+          vectorEffect: 'non-scaling-stroke',
+          pointerEvents: 'none',
+        },
+        // A dashed 2 px line is too thin to click; this catches the pointer around it.
+        { kind: 'hit-line', x1, y1, x2, y2, strokeWidthPx: 12 },
+      ],
+    }
+  },
   presentation: {
     icon: { kind: 'iconify', name: 'lucide:split' },
     label: 'Separator',
     hidden: true,
-    actionMenu: false,
+    actionMenu: true,
   },
 }
