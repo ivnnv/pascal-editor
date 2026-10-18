@@ -1,10 +1,9 @@
 'use client'
 
 import {
+  type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
-  bboxCornerAnchors,
-  collectAlignmentAnchors,
   DEFAULT_ANGLE_STEP,
   type FloorplanGeometry,
   type FloorplanPalette,
@@ -20,19 +19,20 @@ import { useViewer } from '@pascal-app/viewer'
 import { memo, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useState } from 'react'
 import { create } from 'zustand'
 import { GROUP_MOVE_DRAG_LABEL, GROUP_ROTATE_DRAG_LABEL } from '../../lib/contextual-help'
-import { applyFloorplanAlignment } from '../../lib/floorplan/apply-alignment'
 import { clientToPlan } from '../../lib/floorplan/plan-coords'
+import {
+  collectGroupMoveCandidates,
+  groupMoveLockKeyReplay,
+  groupMoveRestAnchors,
+  isGroupMoveLockKey,
+  resolveGroupMoveDelta,
+} from '../../lib/group-move-snap'
 import { isHistoryShortcut } from '../../lib/history'
 import { formatLinearMeasurement } from '../../lib/measurements'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { isTypingTarget } from '../../lib/typing-target'
 import useAlignmentGuides from '../../store/use-alignment-guides'
-import useEditor, {
-  isAlignmentGuideActive,
-  isAngleSnapActive,
-  isGridSnapActive,
-  isMagneticSnapActive,
-} from '../../store/use-editor'
+import useEditor, { isAngleSnapActive } from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
 import useInteractionScope, { useMovingNode } from '../../store/use-interaction-scope'
 import {
@@ -41,9 +41,7 @@ import {
   computeGroupPlanBox,
   type GroupPlanBounds,
   groupPlanBounds,
-  groupWallAlignmentAnchors,
   levelFrame,
-  lockGroupDelta,
   planBoundsCenter,
   rotateGroupPatches,
   rotateGroupSnapshots,
@@ -60,9 +58,8 @@ import { FloorplanDimensionRenderer } from './renderers/floorplan-dimension-rend
 // any selected element of a multi-selection slides the whole selection
 // rigidly (Photoshop semantics). Both share the participant snapshot +
 // translate math, the live preview channel (`useLiveNodeOverrides.setMany` +
-// welded `LinkedNeighbor` endpoints), the snapping entry points (grid step
-// via `isGridSnapActive`, Figma alignment via the shared resolver), and the
-// single-undo commit (history pause → one `updateNodes` → resume).
+// welded `LinkedNeighbor` endpoints), the snapping (`resolveGroupMoveDelta`,
+// shared with the Move pick-up too), and the single-undo commit (history pause → one `updateNodes` → resume).
 
 // Same engage threshold as the layer's Cmd-drag direct move.
 const DRAG_THRESHOLD_PX = 4
@@ -115,8 +112,8 @@ export function startFloorplanGroupMove(
     starts: ReturnType<typeof collectParticipants>['starts']
     links: ReturnType<typeof collectParticipants>['links']
     affectedIds: AnyNodeId[]
-    candidates: ReturnType<typeof collectAlignmentAnchors>
-    restAnchors: ReturnType<typeof bboxCornerAnchors>
+    candidates: AlignmentAnchor[]
+    restAnchors: AlignmentAnchor[]
     startBounds: GroupPlanBounds
     restBounds: GroupPlanBounds
     rotation: number
@@ -135,29 +132,11 @@ export function startFloorplanGroupMove(
     if (starts.length === 0) return null
     const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
 
-    // Alignment candidates — anchors of everything OUTSIDE the moving set
-    // (selection + welded neighbours), gathered once at drag start.
-    const movingIdSet = new Set<string>(affectedIds)
-    const staticNodes: Record<string, AnyNode> = {}
-    for (const [nid, n] of Object.entries(nodes)) {
-      if (n && !movingIdSet.has(nid)) staticNodes[nid] = n
-    }
-    const candidates = collectAlignmentAnchors(staticNodes, '', levelId)
-
-    // The group aligns as one rigid footprint: its bbox corners + center are
-    // the moving anchors, measured in the level frame like the plan itself.
+    const candidates = collectGroupMoveCandidates(nodes, affectedIds, levelId)
     const { inverse: frameInv } = levelFrame(levelId)
     const restBounds = groupPlanBounds(starts, frameInv)
     if (!restBounds) return null
-    const restAnchors = bboxCornerAnchors(
-      'group-move',
-      restBounds.minX,
-      restBounds.minZ,
-      restBounds.maxX,
-      restBounds.maxZ,
-    )
-    // AIKAZA: the moved walls' faces align with their neighbours' too.
-    restAnchors.push(...groupWallAlignmentAnchors(starts, nodes))
+    const restAnchors = groupMoveRestAnchors(restBounds, starts, nodes)
 
     for (const id of affectedIds) {
       useLiveTransforms.getState().clear(id)
@@ -195,41 +174,15 @@ export function startFloorplanGroupMove(
   const applyMove = (e: PointerEvent, s: Session) => {
     const plan = clientToPlan(e.clientX, e.clientY)
     if (!plan) return
-    // Snap the slide DELTA to the active grid step so the selection's
-    // internal layout stays intact — grid-aligned members stay aligned.
-    // Mode-driven like the 3D group move: the `handle-drag` scope resolves
-    // to the item snap context, so Shift cycles the mode mid-drag.
-    const step = useEditor.getState().gridSnapStep
-    const snap = isGridSnapActive() && step > 0
-    let dx = snap ? Math.round((plan[0] - startPlan[0]) / step) * step : plan[0] - startPlan[0]
-    let dz = snap ? Math.round((plan[1] - startPlan[1]) / step) * step : plan[1] - startPlan[1]
-
-    // AIKAZA: Cmd/Ctrl held keeps the move straight (0/45/90°), with no grid or alignment snap.
-    const locked =
-      e.ctrlKey || e.metaKey ? lockGroupDelta(plan[0] - startPlan[0], plan[1] - startPlan[1]) : null
-    if (locked) [dx, dz] = locked
-
-    // Figma-style alignment layered on top: guides display in every mode
-    // except Off; the magnetic pull applies only in 'lines' mode.
-    if (
-      !locked &&
-      isAlignmentGuideActive() &&
-      s.candidates.length > 0 &&
-      s.restAnchors.length > 0
-    ) {
-      const proposed: [number, number] = [startPlan[0] + dx, startPlan[1] + dz]
-      const aligned = applyFloorplanAlignment(
-        proposed,
-        s.restAnchors.map((a) => ({ ...a, x: a.x + dx, z: a.z + dz })),
-        s.candidates,
-        { applySnap: isMagneticSnapActive() },
-      )
-      dx = aligned.point[0] - startPlan[0]
-      dz = aligned.point[1] - startPlan[1]
-    } else {
-      useAlignmentGuides.getState().clear()
-    }
-
+    const raw: Vec2 = [plan[0] - startPlan[0], plan[1] - startPlan[1]]
+    const lock = isGroupMoveLockKey(e)
+    const [dx, dz] = resolveGroupMoveDelta({
+      raw,
+      lock,
+      surface: '2d',
+      restAnchors: s.restAnchors,
+      candidates: s.candidates,
+    })
     applyDelta(s, dx, dz)
   }
 
@@ -273,13 +226,7 @@ export function startFloorplanGroupMove(
     s.links = rotated.links
     s.rotation += delta
     s.restBounds = rotatePlanBounds(s.startBounds, pivot, s.rotation)
-    s.restAnchors = bboxCornerAnchors(
-      'group-move',
-      s.restBounds.minX,
-      s.restBounds.minZ,
-      s.restBounds.maxX,
-      s.restBounds.maxZ,
-    )
+    s.restAnchors = groupMoveRestAnchors(s.restBounds, null, useScene.getState().nodes)
     sfxEmitter.emit('sfx:item-rotate')
     applyDelta(s, s.lastDelta?.[0] ?? 0, s.lastDelta?.[1] ?? 0)
   }
@@ -387,18 +334,8 @@ export function startFloorplanGroupMove(
   // would otherwise clear the multi-selection mid-cancel.
   // AIKAZA: pressing or releasing Cmd/Ctrl mid-drag re-applies the move with or without the lock.
   const onCtrlToggle = (e: KeyboardEvent) => {
-    if ((e.key !== 'Control' && e.key !== 'Meta') || !session || !lastMove) return
-    // The lock key's release must not also count as a clean tap that cycles the grid step.
-    if (e.type === 'keyup') e.preventDefault()
-    const m = lastMove
-    applyMove(
-      new PointerEvent('pointermove', {
-        clientX: m.clientX,
-        clientY: m.clientY,
-        ctrlKey: e.type === 'keydown',
-      }),
-      session,
-    )
+    const replay = session ? groupMoveLockKeyReplay(e, lastMove) : null
+    if (replay && session) applyMove(replay, session)
   }
 
   const onKeyDown = (e: KeyboardEvent) => {

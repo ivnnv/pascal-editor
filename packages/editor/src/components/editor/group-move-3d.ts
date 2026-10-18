@@ -1,11 +1,10 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  bboxCornerAnchors,
-  collectAlignmentAnchors,
+  type bboxCornerAnchors,
+  type collectAlignmentAnchors,
   pauseSceneHistory,
   pauseSpaceDetection,
-  resolveAlignment,
   resumeSceneHistory,
   resumeSpaceDetection,
   useLiveNodeOverrides,
@@ -15,15 +14,17 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { type Camera, Plane, type Raycaster, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL } from '../../lib/contextual-help'
+import {
+  collectGroupMoveCandidates,
+  groupMoveLockKeyReplay,
+  groupMoveRestAnchors,
+  isGroupMoveLockKey,
+  resolveGroupMoveDelta,
+} from '../../lib/group-move-snap'
 import { isHistoryShortcut } from '../../lib/history'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { isTypingTarget } from '../../lib/typing-target'
 import useAlignmentGuides from '../../store/use-alignment-guides'
-import useEditor, {
-  isAlignmentGuideActive,
-  isGridSnapActive,
-  isMagneticSnapActive,
-} from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
 import { useFloorplanGroupDrag } from '../editor-2d/floorplan-group-move'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
@@ -51,9 +52,6 @@ import { swallowNextClick } from './handles/use-handle-drag'
 // snapshot, welded junctions, snapping entry points, live override previews,
 // and single-undo commit with the 2D session.
 
-// Figma-style alignment-snap threshold (meters) — same pull distance as the
-// single-node registry move.
-const ALIGNMENT_THRESHOLD_M = 0.08
 const DRAG_THRESHOLD_PX = 4
 
 /**
@@ -126,24 +124,10 @@ export function armGroupMove3d(args: {
     if (!raycaster.ray.intersectPlane(plane, hit)) return null
     const startLocal = hit.clone().applyMatrix4(frameInv)
 
-    // Alignment candidates — anchors of everything OUTSIDE the moving set,
-    // gathered once at drag start. The group aligns as one rigid footprint:
-    // its bbox corners + center are the moving anchors.
-    const movingIdSet = new Set<string>(affectedIds)
-    const staticNodes: Record<string, AnyNode> = {}
-    for (const [nid, n] of Object.entries(nodes)) {
-      if (n && !movingIdSet.has(nid)) staticNodes[nid] = n
-    }
-    const candidates = collectAlignmentAnchors(staticNodes, '', levelId)
+    const candidates = collectGroupMoveCandidates(nodes, affectedIds, levelId)
     const restBounds = groupPlanBounds(starts, frameInv)
     if (!restBounds) return null
-    const restAnchors = bboxCornerAnchors(
-      'group-move',
-      restBounds.minX,
-      restBounds.minZ,
-      restBounds.maxX,
-      restBounds.maxZ,
-    )
+    const restAnchors = groupMoveRestAnchors(restBounds, starts, nodes)
 
     for (const id of affectedIds) {
       useLiveTransforms.getState().clear(id)
@@ -189,35 +173,13 @@ export function armGroupMove3d(args: {
     if (!raycaster.ray.intersectPlane(s.plane, moveHit)) return
     const moveLocal = moveHit.applyMatrix4(s.frameInv)
 
-    // Snap the slide DELTA to the active grid step so the selection's internal
-    // layout stays intact. Mode-driven: the `handle-drag` scope resolves to
-    // the item snap context, so Shift cycles the mode mid-drag.
-    const step = useEditor.getState().gridSnapStep
-    const snap = isGridSnapActive() && step > 0
-    let dx = snap
-      ? Math.round((moveLocal.x - s.startLocal.x) / step) * step
-      : moveLocal.x - s.startLocal.x
-    let dz = snap
-      ? Math.round((moveLocal.z - s.startLocal.z) / step) * step
-      : moveLocal.z - s.startLocal.z
-
-    // Figma-style alignment layered on top: guides display in every mode
-    // except Off; the magnetic pull applies only in 'lines' mode.
-    if (isAlignmentGuideActive() && s.candidates.length > 0 && s.restAnchors.length > 0) {
-      const result = resolveAlignment({
-        moving: s.restAnchors.map((a) => ({ ...a, x: a.x + dx, z: a.z + dz })),
-        candidates: s.candidates,
-        threshold: ALIGNMENT_THRESHOLD_M,
-      })
-      if (result.snap && isMagneticSnapActive()) {
-        dx += result.snap.dx
-        dz += result.snap.dz
-      }
-      useAlignmentGuides.getState().set(result.guides)
-    } else {
-      useAlignmentGuides.getState().clear()
-    }
-
+    const [dx, dz] = resolveGroupMoveDelta({
+      raw: [moveLocal.x - s.startLocal.x, moveLocal.z - s.startLocal.z],
+      lock: isGroupMoveLockKey(e),
+      surface: '3d',
+      restAnchors: s.restAnchors,
+      candidates: s.candidates,
+    })
     applyDelta(s, dx, dz)
   }
 
@@ -264,13 +226,7 @@ export function armGroupMove3d(args: {
     // previous axis-aligned fit would inflate the box every step.
     s.rotation += delta
     s.restBounds = rotatePlanBounds(s.startBounds, pivot, s.rotation)
-    s.restAnchors = bboxCornerAnchors(
-      'group-move',
-      s.restBounds.minX,
-      s.restBounds.minZ,
-      s.restBounds.maxX,
-      s.restBounds.maxZ,
-    )
+    s.restAnchors = groupMoveRestAnchors(s.restBounds, null, useScene.getState().nodes)
     sfxEmitter.emit('sfx:item-rotate')
     applyDelta(s, s.lastDelta?.[0] ?? 0, s.lastDelta?.[1] ?? 0)
   }
@@ -290,6 +246,7 @@ export function armGroupMove3d(args: {
     window.removeEventListener('pointerup', onUp, true)
     window.removeEventListener('pointercancel', onPointerCancel)
     window.removeEventListener('keydown', onKeyDown, true)
+    window.removeEventListener('keyup', onLockKey, true)
   }
 
   // History resume is NOT here — it pairs one-to-one with the
@@ -307,8 +264,10 @@ export function armGroupMove3d(args: {
     useFloorplanGroupDrag.getState().set(null)
   }
 
+  let lastMove: PointerEvent | null = null
   const onMove = (e: PointerEvent) => {
     if (e.pointerId !== pointerId) return
+    lastMove = e
     if (!session) {
       if (Math.hypot(e.clientX - clientX, e.clientY - clientY) < DRAG_THRESHOLD_PX) return
       session = engage()
@@ -380,8 +339,15 @@ export function armGroupMove3d(args: {
   // Capture phase so the drag's Escape / R / T win over the global
   // `use-keyboard` arms, which would otherwise act on stale store state
   // (or clear the multi-selection) mid-session.
+  // AIKAZA: pressing or releasing Cmd/Ctrl mid-drag re-applies the move with or without the angle lock.
+  const onLockKey = (e: KeyboardEvent) => {
+    const replay = session ? groupMoveLockKeyReplay(e, lastMove) : null
+    if (replay && session) applyMove(replay, session)
+  }
+
   const onKeyDown = (e: KeyboardEvent) => {
     if (isTypingTarget(e.target)) return
+    onLockKey(e)
     const key = e.key.toLowerCase()
     if ((key === 'r' || key === 't') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
       // Armed but still under the drag threshold: engage first (exactly what
@@ -423,5 +389,6 @@ export function armGroupMove3d(args: {
   window.addEventListener('pointerup', onUp, true)
   window.addEventListener('pointercancel', onPointerCancel)
   window.addEventListener('keydown', onKeyDown, true)
+  window.addEventListener('keyup', onLockKey, true)
   return true
 }

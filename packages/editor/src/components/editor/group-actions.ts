@@ -1,12 +1,9 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  bboxCornerAnchors,
-  collectAlignmentAnchors,
   emitter,
   pauseSceneHistory,
   pauseSpaceDetection,
-  resolveAlignment,
   resumeSceneHistory,
   resumeSpaceDetection,
   type SceneMaterialId,
@@ -18,6 +15,14 @@ import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import { Plane, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL } from '../../lib/contextual-help'
 import { clientToPlan } from '../../lib/floorplan/plan-coords'
+import {
+  collectGroupMoveCandidates,
+  type GroupMoveSurface,
+  groupMoveLockKeyReplay,
+  groupMoveRestAnchors,
+  isGroupMoveLockKey,
+  resolveGroupMoveDelta,
+} from '../../lib/group-move-snap'
 import { deleteSelectedSeparator, requestRoomDeletion } from '../../lib/room-structure-commands'
 import { captureElementActionOrigin, completeElementAction } from '../../lib/room-zone-routing'
 import {
@@ -31,12 +36,7 @@ import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
 import { isTypingTarget } from '../../lib/typing-target'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useDeleteConfirmation from '../../store/use-delete-confirmation'
-import useEditor, {
-  isAlignmentGuideActive,
-  isBrushMode,
-  isGridSnapActive,
-  isMagneticSnapActive,
-} from '../../store/use-editor'
+import useEditor, { isBrushMode } from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
 import useInteractionScope from '../../store/use-interaction-scope'
 import { useFloorplanGroupDrag } from '../editor-2d/floorplan-group-move'
@@ -45,9 +45,7 @@ import {
   collectParticipants,
   computeGroupBox,
   groupPlanBounds,
-  groupWallAlignmentAnchors,
   levelFrame,
-  lockGroupDelta,
   planBoundsCenter,
   rotateGroupSnapshots,
   rotatePlanBounds,
@@ -64,7 +62,6 @@ import { getEditorThreeContext } from './three-context-bridge'
 // ground-plane raycast through the bridged camera — until a click commits it
 // as one undo step. Escape / right-click cancels.
 
-const ALIGNMENT_THRESHOLD_M = 0.08
 // Matches the keyboard Delete arm's accidental-bulk-delete guard.
 const BULK_DELETE_THRESHOLD = 10
 
@@ -123,29 +120,16 @@ export function startGroupPickUp(
   // resolve into it before measuring.
   const plane = new Plane(new Vector3(0, 1, 0), -(restBox?.min.y ?? 0))
 
-  // Alignment candidates — everything outside the moving set; the group
-  // aligns as one rigid footprint via its bbox corners + center.
-  const movingIdSet = new Set<string>(affectedIds)
-  const staticNodes: Record<string, AnyNode> = {}
-  for (const [nid, n] of Object.entries(nodes)) {
-    if (n && !movingIdSet.has(nid)) staticNodes[nid] = n
-  }
-  const candidates = collectAlignmentAnchors(staticNodes, '', levelId)
-  let restAnchors = bboxCornerAnchors(
-    'group-move',
-    restBounds.minX,
-    restBounds.minZ,
-    restBounds.maxX,
-    restBounds.maxZ,
-  )
-  // AIKAZA: the moved walls' faces align with their neighbours' too.
-  restAnchors.push(...groupWallAlignmentAnchors(starts, nodes))
+  const candidates = collectGroupMoveCandidates(nodes, affectedIds, levelId)
+  let restAnchors = groupMoveRestAnchors(restBounds, starts, nodes)
 
   // Cursor → level-frame plan point, whichever surface the pointer is over.
   const ndc = new Vector2()
+  let lastSurface: GroupMoveSurface = '2d'
   const resolvePlanPoint = (e: PointerEvent): Vec2 | null => {
     const three = getEditorThreeContext()
     if (three && e.target === three.domElement) {
+      lastSurface = '3d'
       const rect = three.domElement.getBoundingClientRect()
       ndc.set(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -172,6 +156,7 @@ export function startGroupPickUp(
       return null
     }
     const plan = clientToPlan(e.clientX, e.clientY)
+    lastSurface = '2d'
     return plan ? [plan[0], plan[1]] : null
   }
 
@@ -199,32 +184,17 @@ export function startGroupPickUp(
       startPlan = plan
       return
     }
-    const step = useEditor.getState().gridSnapStep
-    const snap = isGridSnapActive() && step > 0
-    const rawDx = opts.positionAtCursor ? plan[0] - restCenter[0] : plan[0] - startPlan![0]
-    const rawDz = opts.positionAtCursor ? plan[1] - restCenter[1] : plan[1] - startPlan![1]
-    let dx = snap ? Math.round(rawDx / step) * step : rawDx
-    let dz = snap ? Math.round(rawDz / step) * step : rawDz
-
-    // AIKAZA: Cmd/Ctrl held keeps the move straight (0/45/90°), with no grid or alignment snap.
-    const locked = e.ctrlKey || e.metaKey ? lockGroupDelta(rawDx, rawDz) : null
-    if (locked) [dx, dz] = locked
-
-    if (!locked && isAlignmentGuideActive() && candidates.length > 0 && restAnchors.length > 0) {
-      const result = resolveAlignment({
-        moving: restAnchors.map((a) => ({ ...a, x: a.x + dx, z: a.z + dz })),
-        candidates,
-        threshold: ALIGNMENT_THRESHOLD_M,
-      })
-      if (result.snap && isMagneticSnapActive()) {
-        dx += result.snap.dx
-        dz += result.snap.dz
-      }
-      useAlignmentGuides.getState().set(result.guides)
-    } else {
-      useAlignmentGuides.getState().clear()
-    }
-
+    const raw: Vec2 = opts.positionAtCursor
+      ? [plan[0] - restCenter[0], plan[1] - restCenter[1]]
+      : [plan[0] - startPlan![0], plan[1] - startPlan![1]]
+    const lock = isGroupMoveLockKey(e)
+    const [dx, dz] = resolveGroupMoveDelta({
+      raw,
+      lock,
+      surface: lastSurface,
+      restAnchors,
+      candidates,
+    })
     applyDelta(dx, dz)
   }
 
@@ -267,13 +237,7 @@ export function startGroupPickUp(
     links = rotated.links
     carriedRotation += delta
     restBounds = rotatePlanBounds(startBounds, pivot, carriedRotation)
-    restAnchors = bboxCornerAnchors(
-      'group-move',
-      restBounds.minX,
-      restBounds.minZ,
-      restBounds.maxX,
-      restBounds.maxZ,
-    )
+    restAnchors = groupMoveRestAnchors(restBounds, null, useScene.getState().nodes)
     sfxEmitter.emit('sfx:item-rotate')
     applyDelta(lastDelta?.[0] ?? 0, lastDelta?.[1] ?? 0)
   }
@@ -345,17 +309,8 @@ export function startGroupPickUp(
 
   // AIKAZA: pressing or releasing Cmd/Ctrl mid-move re-applies the move with or without the lock.
   const onLockKey = (e: KeyboardEvent) => {
-    if ((e.key !== 'Control' && e.key !== 'Meta') || !lastMove) return
-    // The lock key's release must not also count as a clean tap that cycles the grid step.
-    if (e.type === 'keyup') e.preventDefault()
-    const m = lastMove
-    applyMove(
-      new PointerEvent('pointermove', {
-        clientX: m.clientX,
-        clientY: m.clientY,
-        ctrlKey: e.type === 'keydown',
-      }),
-    )
+    const replay = groupMoveLockKeyReplay(e, lastMove)
+    if (replay) applyMove(replay)
   }
 
   // Capture phase: commit before the press reaches selection / tools, so the

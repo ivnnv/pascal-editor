@@ -183,6 +183,7 @@ import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-me
 import { FloorplanSiteKeyHandler } from '../editor-2d/floorplan-hotkey-handlers'
 import { FloorplanJointAngleLayer } from '../editor-2d/floorplan-joint-angle-layer'
 import { FloorplanMeasurementToolLayer } from '../editor-2d/floorplan-measurement-tool-layer'
+import { FloorplanMoveGhostLayer } from '../editor-2d/floorplan-move-ghost-layer'
 import { FloorplanOpenWallEndsLayer } from '../editor-2d/floorplan-open-wall-ends-layer'
 import {
   FloorplanRegisteredToolLayer,
@@ -6605,6 +6606,8 @@ export function FloorplanPanel({
         hasUserAdjustedViewportRef.current = false
         latestFloorplanUserRotationDegRef.current = 0
         latestViewportRef.current = null
+        // AIKAZA-DEBUG north-up race
+        console.log('[north-up] reset by level change', levelId)
         setFloorplanUserRotationDeg(0)
         setViewport(null)
       }
@@ -7311,10 +7314,21 @@ export function FloorplanPanel({
       northUpAppliedRef.current = false
       return
     }
-    if (northUpAppliedRef.current || !viewport) return
+    // AIKAZA: opening the plan and a level change both reset the view to 45° and clear the
+    // viewport, sometimes after this ran, so a cleared viewport re-arms north-up.
+    if (!viewport) {
+      northUpAppliedRef.current = false
+      return
+    }
+    if (northUpAppliedRef.current) return
     northUpAppliedRef.current = true
+    // AIKAZA-DEBUG north-up race
+    console.log('[north-up] apply', {
+      startNorthUp: useFloorplanPreferences.getState().startNorthUp,
+      levelId,
+    })
     if (useFloorplanPreferences.getState().startNorthUp) alignFloorplanViewToNorth()
-  }, [alignFloorplanViewToNorth, isFloorplanOpen, viewport])
+  }, [alignFloorplanViewToNorth, isFloorplanOpen, levelId, viewport])
 
   const clearGuideInteraction = useCallback(() => {
     guideInteractionRef.current = null
@@ -7818,6 +7832,8 @@ export function FloorplanPanel({
       hasUserAdjustedViewportRef.current = false
       latestFloorplanUserRotationDegRef.current = 0
       latestViewportRef.current = null
+      // AIKAZA-DEBUG north-up race
+      console.log('[north-up] reset by plan open')
       setFloorplanUserRotationDeg(0)
       setViewport(null)
     }
@@ -11660,6 +11676,8 @@ export function FloorplanPanel({
                   The provider carries editor presentation data—palette,
                   scale, rotation, and the shared selection-hatch pattern. */}
               <FloorplanRenderProvider {...floorplanRenderProps}>
+                {/* AIKAZA: where moved walls started, under everything, outside the fit measure. */}
+                {activeDrawingType !== 'site-plan' && <FloorplanMoveGhostLayer />}
                 {/* Wrapped in a measured `<g>` so `fittedViewport` can
                     fit to just the painted node geometry — measuring the
                     whole rotation group would include the grid layer,

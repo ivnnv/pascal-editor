@@ -118,6 +118,7 @@ function ShortcutSequence({
 // passive row (no `onClick`) or a clickable button. The outer container is
 // `pointer-events-none`, so clickable chips opt back in.
 function ChipRow({
+  active = false,
   ariaLabel,
   disabled = false,
   guideTarget,
@@ -127,6 +128,8 @@ function ChipRow({
   shortcut,
   tooltip,
 }: {
+  /** AIKAZA: lit like a held key hint while its shortcut is held. */
+  active?: boolean
   ariaLabel?: string
   disabled?: boolean
   /**
@@ -143,9 +146,23 @@ function ChipRow({
   const body = (
     <>
       <span className={KEY_CELL_CLASS}>
-        {shortcut ? <ShortcutToken className={TOKEN_CLASS} value={shortcut} /> : null}
+        {shortcut ? (
+          <ShortcutToken
+            className={cn(
+              TOKEN_CLASS,
+              active &&
+                'border-foreground bg-foreground text-background shadow-sm dark:border-white dark:bg-white dark:text-black',
+            )}
+            value={shortcut}
+          />
+        ) : null}
       </span>
-      <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
+      <span
+        className={cn(
+          'flex min-w-0 items-center gap-1.5 text-xs',
+          active ? 'font-medium text-foreground dark:text-white' : 'text-muted-foreground',
+        )}
+      >
         {icon ? <Icon className="shrink-0" height={13} icon={icon} width={13} /> : null}
         <span className="truncate">{label}</span>
       </span>
@@ -249,6 +266,7 @@ function SnappingChips({ context }: { context: SnapContext }) {
   return (
     <>
       <ChipRow
+        active={held}
         ariaLabel={snappingLabel(snappingMode, held)}
         guideTarget="snap-mode"
         icon={SNAPPING_MODE_ICONS[held ? 'off' : snappingMode]}
