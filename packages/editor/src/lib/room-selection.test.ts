@@ -872,7 +872,8 @@ describe('room drill-down state through the mounted selection manager', () => {
       await click('wall_shared', [4.1, 2], { alt: true })
       expect(useViewer.getState().selection.selectedIds).toEqual(['wall_shared'])
       expect(useEditor.getState().room).toEqual(left)
-      for (const modifier of ['shift', 'ctrl', 'meta'] as const) {
+      // Only Shift toggles membership; Cmd/Ctrl is the straight-angle lock while moving.
+      for (const modifier of ['shift'] as const) {
         await click('wall_east', [7.9, 2], { [modifier]: true })
         expect(useViewer.getState().selection.selectedIds).toEqual(['wall_shared', 'wall_east'])
         await click('wall_east', [7.9, 2], { [modifier]: true })

@@ -134,7 +134,7 @@ describe('resolveSelectedIdsForNodeClick', () => {
       resolveSelectedIdsForNodeClick({
         baseSelectedIds: ['wall_1'],
         currentSelectedIds: [],
-        modifierKeys: { meta: true, ctrl: false, shift: false, alt: false },
+        modifierKeys: { meta: false, ctrl: false, shift: true, alt: false },
         nodeId: 'item_1',
       }),
     ).toEqual(['wall_1', 'item_1'])
@@ -513,4 +513,14 @@ describe('shouldPreserveSelectedRoofHostTarget', () => {
       }),
     ).toBe(false)
   })
+})
+
+test('Cmd/Ctrl alone does not toggle selection membership', () => {
+  expect(
+    resolveSelectedIdsForNodeClick({
+      currentSelectedIds: ['wall_1'],
+      modifierKeys: { meta: true, ctrl: true, shift: false, alt: false },
+      nodeId: 'item_1',
+    }),
+  ).toEqual(['item_1'])
 })
