@@ -26,6 +26,7 @@ import useEditor from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
 import { useFloorplanRender } from '../editor-2d/floorplan-render-context'
 import { FloorplanGeometryRenderer } from '../editor-2d/renderers/floorplan-geometry-renderer'
+import { resolveFloorplanWorldHandleScale } from '../editor-2d/renderers/floorplan-registry-layer'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { ActionMenuButton } from './action-menu-button'
 import { formatMeasurement } from './measurement-pill'
@@ -127,12 +128,13 @@ function PlanArrow({
   onPointerDown: (event: ReactPointerEvent<SVGPathElement>) => void
 }) {
   const [hover, setHover] = useState(false)
+  const scale = resolveFloorplanWorldHandleScale(useFloorplanRender()?.unitsPerPixel ?? 0.01)
   const angle = (Math.atan2(outward[1], outward[0]) * 180) / Math.PI
   return (
     <g
       data-room-arrow={kind}
       onClick={(event) => event.stopPropagation()}
-      transform={`translate(${position[0]} ${position[1]}) rotate(${angle})`}
+      transform={`translate(${position[0]} ${position[1]}) rotate(${angle}) scale(${scale})`}
     >
       <path d={ARROW_PATH} fill={hover ? ARROW_HOVER_FILL : ARROW_FILL} pointerEvents="none" />
       <path

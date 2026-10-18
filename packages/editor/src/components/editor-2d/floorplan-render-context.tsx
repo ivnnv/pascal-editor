@@ -87,11 +87,14 @@ export function FloorplanRenderProvider({
   hatchPatternId,
   sceneRotationDeg,
   getSceneRotationDeg,
+  scaleReference,
 }: FloorplanRenderContextValue & {
   children: ReactNode
   getSceneRotationDeg: () => number
+  /** Shared with the plan, which updates it on every zoom step. */
+  scaleReference?: FloorplanRenderScaleReference
 }) {
-  const renderScaleReference = useRef<FloorplanRenderScaleReference | null>(null)
+  const renderScaleReference = useRef<FloorplanRenderScaleReference | null>(scaleReference ?? null)
   if (!renderScaleReference.current) {
     renderScaleReference.current = createFloorplanRenderScaleReference(unitsPerPixel)
   }

@@ -183,6 +183,7 @@ import { FloorplanRegisteredToolLayer } from '../editor-2d/floorplan-registered-
 import { FloorplanRegistryActionMenu } from '../editor-2d/floorplan-registry-action-menu'
 import { FloorplanRegistryMoveOverlay } from '../editor-2d/floorplan-registry-move-overlay'
 import {
+  createFloorplanRenderScaleReference,
   type FloorplanRenderContextValue,
   FloorplanRenderProvider,
 } from '../editor-2d/floorplan-render-context'
@@ -5225,6 +5226,8 @@ export function FloorplanPanel({
   const [floorplanRenderUnitsPerPixel, setFloorplanRenderUnitsPerPixel] = useState<number | null>(
     null,
   )
+  // Labels and handles read this, so they resize on every zoom step, not once the zoom settles.
+  const [floorplanScaleReference] = useState(() => createFloorplanRenderScaleReference(0.01))
   if (!floorplanViewportInteractionInProgressRef.current) {
     latestViewportRef.current = viewport
   }
@@ -6034,6 +6037,9 @@ export function FloorplanPanel({
       }
       const nextPaintViewBox = getFloorplanRotationOverscanViewBox(nextViewBox)
       floorplanImperativeViewBoxRef.current = nextViewBox
+      floorplanScaleReference.update(
+        nextViewport.width / Math.max(svgRef.current?.getBoundingClientRect().width ?? 0, 1),
+      )
       hasUserAdjustedViewportRef.current = true
       latestViewportRef.current = nextViewport
       svgRef.current?.setAttribute(
@@ -6048,7 +6054,7 @@ export function FloorplanPanel({
         background.setAttribute('height', String(nextPaintViewBox.height))
       }
     },
-    [svgAspectRatio],
+    [floorplanScaleReference, svgAspectRatio],
   )
 
   const fittedViewport = useMemo(() => {
@@ -7075,6 +7081,14 @@ export function FloorplanPanel({
   const liveFloorplanUnitsPerPixel = viewBox.width / Math.max(surfaceSize.width, 1)
   const floorplanUnitsPerPixel = floorplanRenderUnitsPerPixel ?? liveFloorplanUnitsPerPixel
   latestFloorplanRenderUnitsPerPixelRef.current = floorplanUnitsPerPixel
+  const floorplanRenderProps = {
+    scaleReference: floorplanScaleReference,
+    getSceneRotationDeg: getFloorplanSceneRotationDeg,
+    hatchPatternId: wallSelectionHatchId,
+    palette: floorplanRegistryPalette,
+    sceneRotationDeg: floorplanSceneRotationDeg,
+    unitsPerPixel: floorplanUnitsPerPixel,
+  }
 
   useEffect(() => {
     setReferenceScaleUnit(unit === 'imperial' ? 'feet' : 'meters')
@@ -11566,13 +11580,7 @@ export function FloorplanPanel({
                   supplies its geometry through `NodeDefinition.floorplan`.
                   The provider carries editor presentation data—palette,
                   scale, rotation, and the shared selection-hatch pattern. */}
-              <FloorplanRenderProvider
-                getSceneRotationDeg={getFloorplanSceneRotationDeg}
-                hatchPatternId={wallSelectionHatchId}
-                palette={floorplanRegistryPalette}
-                sceneRotationDeg={floorplanSceneRotationDeg}
-                unitsPerPixel={floorplanUnitsPerPixel}
-              >
+              <FloorplanRenderProvider {...floorplanRenderProps}>
                 {/* Wrapped in a measured `<g>` so `fittedViewport` can
                     fit to just the painted node geometry — measuring the
                     whole rotation group would include the grid layer,
@@ -11614,7 +11622,10 @@ export function FloorplanPanel({
                   overlay during a free-translate drag. Sits above the
                   registry layer so the red lines and distance pills
                   paint on top of node geometry. */}
-              <FloorplanAlignmentGuideLayer />
+              {/* Its own provider: it keeps its size at any zoom and still paints above the site layers. */}
+              <FloorplanRenderProvider {...floorplanRenderProps}>
+                <FloorplanAlignmentGuideLayer />
+              </FloorplanRenderProvider>
 
               {/* The property line, its vertex handles and its edge labels are
                   drawn in BUILDING-LOCAL metres (the frame the level's walls
@@ -11668,7 +11679,9 @@ export function FloorplanPanel({
               {/* "Magnetic" wall-snap beacon — per-kind glyph at the active
                   draft / endpoint-move snap point. Same store + coord space as
                   the alignment guides. */}
-              <FloorplanSnapBeaconLayer />
+              <FloorplanRenderProvider {...floorplanRenderProps}>
+                <FloorplanSnapBeaconLayer />
+              </FloorplanRenderProvider>
 
               <FloorplanMarqueeOverlay cursorColor={palette.cursor} />
 
