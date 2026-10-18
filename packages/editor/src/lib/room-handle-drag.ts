@@ -13,9 +13,13 @@ import {
   getWallFaceOffsets,
   groundFloorConstruction,
   type NodeChange,
+  type PlanTranslateSnap,
   type Point,
+  planSnapTargetMarker,
+  planTranslateSnapGuide,
   planWallDivision,
   resolveMovedWallSupportSlabPatch,
+  resolvePlanTranslateSnap,
   runAsSingleSceneHistoryStep,
   type StructureNodes,
   type StructurePlan,
@@ -23,10 +27,12 @@ import {
   setWallGeometry,
   setZoneEdges,
   setZoneIntent,
+  sidewaysMoveSnapTargets,
   upperFloorHeightControl,
   useLiveNodeOverrides,
   useScene,
   type WallNode,
+  wallPlanSnapLines,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import type { Ray } from 'three'
@@ -35,9 +41,12 @@ import { ARROW_COLOR } from '../components/editor/handles/handle-arrow'
 import { resolveResizeSnapValue } from '../components/editor/handles/resize-snap'
 import { swallowNextClick } from '../components/editor/handles/use-handle-drag'
 import { getRoomSelectionIndex } from '../hooks/use-selected-room'
-import useEditor, { isGridSnapActive } from '../store/use-editor'
+import useAlignmentGuides from '../store/use-alignment-guides'
+import useEditor, { getActiveSnappingMode, isGridSnapActive } from '../store/use-editor'
 import { useWallMoveGhosts } from '../store/use-wall-move-ghosts'
+import useWallSnapIndicator from '../store/use-wall-snap-indicator'
 import { footprintHeightPatch, footprintHeightValue } from './floor-footprints'
+import { FLOORPLAN_ALIGNMENT_THRESHOLD_M } from './floorplan/apply-alignment'
 import { clientToPlan } from './floorplan/plan-coords'
 import { beginGesture } from './gesture-lifecycle'
 import { isHistoryShortcut } from './history'
@@ -874,6 +883,23 @@ export function runRoomHandleDrag({
  * step: the whole wall with its neighbours for a `[0, 1]` span, else the span
  * split off and moved alone.
  */
+/** Marks what a pushed wall snapped onto: the snap marker on the target and a guide to the wall. */
+function showPushSnap(snap: PlanTranslateSnap | null) {
+  const guide = snap ? planTranslateSnapGuide(snap) : null
+  if (guide) useAlignmentGuides.getState().set([guide])
+  else useAlignmentGuides.getState().clear()
+  useWallSnapIndicator.getState().set(
+    snap
+      ? {
+          x: snap.anchor[0],
+          z: snap.anchor[1],
+          kind: planSnapTargetMarker(snap.target),
+          wallIds: [snap.target.nodeId],
+        }
+      : null,
+  )
+}
+
 export function runWallPushDrag({
   handle,
   levelId,
@@ -921,8 +947,36 @@ export function runWallPushDrag({
         message,
       },
     })
-  const toDistance = (at: number | null) =>
-    at === null ? null : snapPushDistance(handle.line, at - from)
+  // Lines the pushed wall up with the ends, faces and continuations of the other walls.
+  const snapTargets = sidewaysMoveSnapTargets(
+    wall,
+    Object.values(nodes).filter(
+      (other): other is WallNode =>
+        other?.type === 'wall' && other.parentId === wall.parentId && other.id !== wall.id,
+    ),
+  )
+  const snapLines = wallPlanSnapLines(wall)
+  const toDistance = (at: number | null) => {
+    if (at === null) return null
+    const raw = at - from
+    if (getActiveSnappingMode() === 'off') {
+      showPushSnap(null)
+      return raw
+    }
+    const reach = FLOORPLAN_ALIGNMENT_THRESHOLD_M
+    const snap = resolvePlanTranslateSnap({
+      axis: handle.outward,
+      lines: snapLines,
+      offset: raw,
+      targets: snapTargets,
+      reach,
+    })
+    const backToStart =
+      Math.abs(raw) <= reach && (!snap || Math.abs(raw) <= Math.abs(snap.offset - raw))
+    showPushSnap(backToStart ? null : snap)
+    if (backToStart) return 0
+    return snap ? snap.offset : snapPushDistance(handle.line, raw)
+  }
   publish()
   return runRoomHandleDrag({
     label: WALL_PUSH_DRAG_LABEL,
@@ -945,10 +999,14 @@ export function runWallPushDrag({
       publish(preview.code ? "Can't move this wall there" : undefined)
     },
     onCommit: () => {
+      showPushSnap(null)
       if (blocked) endRoomPushPreview()
       else commitRoomPush(handle, handle.outward, distance)
     },
-    onCancel: () => endRoomPushPreview(),
+    onCancel: () => {
+      showPushSnap(null)
+      endRoomPushPreview()
+    },
   })
 }
 
