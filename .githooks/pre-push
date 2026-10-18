@@ -3,7 +3,11 @@
 # Full parity: `bun run ci`. Skip once with `git push --no-verify`.
 set -euo pipefail
 
-base=$(git merge-base HEAD origin/main 2>/dev/null || echo origin/main)
+# AIKAZA: a branch is measured from the nearer of our integration branch and Pascal's main,
+# so a fork branch isn't charged for the whole fork and a Pascal-bound one for nothing extra.
+base_main=$(git merge-base HEAD origin/main 2>/dev/null || echo origin/main)
+base_aikaza=$(git merge-base HEAD origin/aikaza 2>/dev/null || echo "$base_main")
+if git merge-base --is-ancestor "$base_main" "$base_aikaza" 2>/dev/null; then base=$base_aikaza; else base=$base_main; fi
 changed=$(git diff --name-only "$base" HEAD)
 
 if echo "$changed" | grep -qE '(^|/)package\.json$|^bun\.lock$'; then
@@ -14,8 +18,13 @@ if echo "$changed" | grep -qE '(^|/)package\.json$|^bun\.lock$'; then
   fi
 fi
 
-echo "pre-push: lint"
-bun run --silent check
+# AIKAZA: lint only what this branch changes; problems elsewhere aren't this push's to fix.
+lintable=$(git diff --name-only --diff-filter=ACMR "$base" HEAD | grep -E '\.(ts|tsx|js|jsx|mjs|cjs|json|jsonc|css)$' || true)
+if [ -n "$lintable" ]; then
+  echo "pre-push: lint changed files"
+  # shellcheck disable=SC2086
+  bunx biome check --no-errors-on-unmatched $lintable
+fi
 
 # Directly changed packages only: `...[$base]` also pulled in every dependent,
 # so a core edit typechecked and tested the whole graph before each push. CI
