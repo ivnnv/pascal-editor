@@ -265,7 +265,7 @@ import { sceneSpan } from './views/scene-region'
 
 const FALLBACK_VIEW_SIZE = 12
 const FLOORPLAN_PADDING = 2
-const MIN_VIEWPORT_WIDTH_RATIO = 0.08
+const MIN_VIEWPORT_WIDTH_RATIO = 0.025
 const MAX_VIEWPORT_WIDTH_RATIO = 40
 const PANEL_MIN_WIDTH = 420
 const PANEL_MIN_HEIGHT = 320
