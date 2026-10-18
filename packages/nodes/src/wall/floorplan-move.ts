@@ -6,8 +6,9 @@ import {
   type FloorplanMoveTargetSession,
   getPerpendicularWallMoveAxis,
   getPlannedLinkedWallUpdates,
-  planWallEndRejoins,
+  planTranslateSnapGuide,
   planWallMoveJunctions,
+  sidewaysMoveSnapTargets,
   useLiveNodeOverrides,
   useScene,
   type WallNode,
@@ -19,6 +20,7 @@ import {
   getSegmentGridStep,
   isSegmentLongEnough,
   snapScalarToGrid,
+  useAlignmentGuides,
   useWallMoveGhosts,
   WALL_CONNECT_SNAP_RADIUS,
   type WallMoveGhostBridge,
@@ -28,10 +30,10 @@ import {
   buildBridgeWallCreates,
   buildBridgeWallPreviews,
   getLinkedWallSnapshots,
-  getWallMoveAlignTargets,
   getWallsAfterUpdates,
   type LinkedWallSnapshot,
-  snapWallMoveProjection,
+  planSidewaysMoveRejoins,
+  snapWallMove,
   stripWallIsNewMetadata,
 } from './move-shared'
 
@@ -67,24 +69,16 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
   const wallId = node.id as AnyNodeId
   const originalStart: WallPlanPoint = [node.start[0], node.start[1]]
   const originalEnd: WallPlanPoint = [node.end[0], node.end[1]]
-  const originalCenter: WallPlanPoint = [
-    (originalStart[0] + originalEnd[0]) / 2,
-    (originalStart[1] + originalEnd[1]) / 2,
-  ]
   // Perpendicular (wall normal) axis — same lock the 3D `MoveWallTool`
   // uses, so a 2D drag slides the wall sideways across its own
   // direction rather than free-floating in XZ. `null` only for
   // degenerate zero-length walls; we fall through to free motion in
   // that case (the wall is going to be deleted anyway).
   const moveAxis = getPerpendicularWallMoveAxis(originalStart, originalEnd)
-  const originalProj = moveAxis
-    ? originalCenter[0] * moveAxis[0] + originalCenter[1] * moveAxis[1]
-    : 0
   // The drag can always land back where it started, or in line with another wall.
-  const alignTargets = moveAxis
-    ? getWallMoveAlignTargets(
-        originalProj,
-        moveAxis,
+  const snapTargets = moveAxis
+    ? sidewaysMoveSnapTargets(
+        node,
         Object.values(useScene.getState().nodes).filter(
           (other): other is WallNode =>
             other.type === 'wall' && other.parentId === node.parentId && other.id !== node.id,
@@ -105,15 +99,15 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
   // Anchor lazily at the first cursor sample (the click point) and
   // measure cursor movement from there. The wall doesn't shift on
   // click — `rawDelta` is zero on the first apply, so the snapped
-  // centre projection equals `originalProj` (already grid-aligned for
+  // centre projection equals the original one (already grid-aligned for
   // walls placed via the draft tool). As the cursor moves, the wall
   // translates along its normal by the cursor's perpendicular delta,
   // snapped to absolute grid lines.
   //
-  // Using `originalCenter` as the anchor instead would pin the wall's
+  // Using the wall centre as the anchor instead would pin the wall's
   // centre to the cursor — but the floor-plan drag icon lives inside
   // a floating menu whose hit-area is offset from the exact wall
-  // centre, so the first `planPoint` would never equal `originalCenter`
+  // centre, so the first `planPoint` would never equal that centre
   // and the wall would snap to a different grid cell the instant the
   // drag began, even before the cursor moved.
   let rawAnchor: WallPlanPoint | null = null
@@ -195,17 +189,22 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       let dx: number
       let dz: number
       if (moveAxis) {
-        const rawProj = originalProj + rawDx * moveAxis[0] + rawDz * moveAxis[1]
-        const snappedProj =
+        const rawOffset = rawDx * moveAxis[0] + rawDz * moveAxis[1]
+        const moved =
           getActiveSnappingMode() === 'off'
-            ? rawProj
-            : snapWallMoveProjection(
-                rawProj,
-                alignTargets,
-                step,
-                getActiveSnappingMode() === 'smart',
-              )
-        const perpDelta = snappedProj - originalProj
+            ? { offset: rawOffset, snap: null }
+            : snapWallMove({
+                wall: node,
+                axis: moveAxis,
+                rawOffset,
+                targets: snapTargets,
+                gridStep: step,
+                softGrid: getActiveSnappingMode() === 'smart',
+              })
+        const guide = moved.snap ? planTranslateSnapGuide(moved.snap) : null
+        if (guide) useAlignmentGuides.getState().set([guide])
+        else useAlignmentGuides.getState().clear()
+        const perpDelta = moved.offset
         dx = moveAxis[0] * perpDelta
         dz = moveAxis[1] * perpDelta
       } else {
@@ -387,8 +386,9 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       })
 
       sceneState.applyNodeChanges(
-        planWallEndRejoins(
+        planSidewaysMoveRejoins(
           sceneState.nodes,
+          wallId,
           commitUpdates.map(({ id }) => id),
           WALL_CONNECT_SNAP_RADIUS,
           {

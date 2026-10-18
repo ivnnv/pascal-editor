@@ -1,11 +1,16 @@
 import {
   type AlignmentGuide,
+  type AnyNode,
   type AnyNodeId,
   getMaterialPresetByRef,
-  isCurvedWall,
+  type PlanSnapTarget,
+  type PlanTranslateSnap,
   parseMaterialColor,
   parseMaterialRef,
+  planWallEndRejoins,
   resolveMaterial,
+  resolvePlanPointSnap,
+  resolvePlanTranslateSnap,
   type SceneMaterialId,
   useScene,
   type WallMoveAxis,
@@ -13,6 +18,9 @@ import {
   type WallNode,
   type WallPlanPoint,
   WallNode as WallSchema,
+  type WallTopologyChanges,
+  wallPlanSnapLines,
+  wallPlanSnapTargets,
 } from '@pascal-app/core'
 import {
   getPlanSnapScale,
@@ -36,8 +44,8 @@ const POINT_EPSILON = 1e-6
 /** How close (m) a sideways wall drag must get to an alignment line to snap onto it. */
 export const WALL_MOVE_ALIGN_TOLERANCE = 0.1
 
-// The same pull in screen pixels while the plan is shown: 10 cm at its tuned zoom.
-const WALL_MOVE_ALIGN_REACH_PX = 10
+// The same pull in screen pixels while the plan is shown, capped at 10 cm.
+const WALL_MOVE_ALIGN_REACH_PX = 16
 
 /** The alignment pull at the plan's zoom, never past `WALL_MOVE_ALIGN_TOLERANCE`. */
 export function wallMoveAlignTolerance(): number {
@@ -47,22 +55,41 @@ export function wallMoveAlignTolerance(): number {
     : WALL_MOVE_ALIGN_TOLERANCE
 }
 
+export type WallMoveSnap = { offset: number; snap: PlanTranslateSnap | null }
+
 /**
- * Positions along `axis` a sideways wall drag aligns to: the wall's own
- * starting line, plus the line through every endpoint of the other walls.
+ * The sideways offset for a wall dragged `rawOffset` along `axis`: back to
+ * where it started, or with its reference line or either face lined up with
+ * a target, whichever is nearest within reach; otherwise on the grid.
  */
-export function getWallMoveAlignTargets(
-  originalProjection: number,
-  axis: WallMoveAxis,
-  otherWalls: ReadonlyArray<Pick<WallNode, 'start' | 'end'>>,
-): number[] {
-  const targets = [originalProjection]
-  for (const wall of otherWalls) {
-    for (const point of [wall.start, wall.end]) {
-      targets.push(point[0] * axis[0] + point[1] * axis[1])
-    }
+export function snapWallMove(args: {
+  wall: Pick<WallNode, 'id' | 'start' | 'end' | 'thickness' | 'justification' | 'curveOffset'>
+  axis: WallMoveAxis
+  rawOffset: number
+  targets: readonly PlanSnapTarget[]
+  gridStep: number
+  softGrid?: boolean
+}): WallMoveSnap {
+  const reach = wallMoveAlignTolerance()
+  const snap = resolvePlanTranslateSnap({
+    axis: args.axis,
+    lines: wallPlanSnapLines(args.wall),
+    offset: args.rawOffset,
+    targets: args.targets,
+    reach,
+  })
+  const backToStart = Math.abs(args.rawOffset)
+  if (backToStart <= reach && (!snap || backToStart <= Math.abs(snap.offset - args.rawOffset))) {
+    return { offset: 0, snap: null }
   }
-  return targets
+  if (snap) return { offset: snap.offset, snap }
+  const originalProjection = args.wall.start[0] * args.axis[0] + args.wall.start[1] * args.axis[1]
+  const projection = snapWallMoveProjection(
+    originalProjection + args.rawOffset,
+    args.gridStep,
+    args.softGrid,
+  )
+  return { offset: projection - originalProjection, snap: null }
 }
 
 /**
@@ -95,60 +122,46 @@ export function snapWallEndpointToExtension(
   rawPoint: WallPlanPoint,
   placedPoint: WallPlanPoint,
   origin: WallPlanPoint,
-  walls: readonly Pick<WallNode, 'id' | 'start' | 'end' | 'curveOffset'>[],
+  walls: readonly Pick<
+    WallNode,
+    'id' | 'start' | 'end' | 'curveOffset' | 'thickness' | 'justification'
+  >[],
 ): WallExtensionSnap | null {
-  let best: {
-    wall: Pick<WallNode, 'id' | 'start' | 'end'>
-    ux: number
-    uz: number
-    past: 'start' | 'end'
-  } | null = null
-  let bestDistance = wallMoveAlignTolerance()
-  for (const wall of walls) {
-    // A curved wall does not continue along its chord.
-    if (isCurvedWall(wall)) continue
-    const dx = wall.end[0] - wall.start[0]
-    const dz = wall.end[1] - wall.start[1]
-    const length = Math.hypot(dx, dz)
-    if (length < POINT_EPSILON) continue
-    const ux = dx / length
-    const uz = dz / length
-    const rx = rawPoint[0] - wall.start[0]
-    const rz = rawPoint[1] - wall.start[1]
-    const along = rx * ux + rz * uz
-    // On the wall's own body the wall snap already holds it.
-    if (along >= 0 && along <= length) continue
-    const distance = Math.abs(rx * uz - rz * ux)
-    if (distance > bestDistance) continue
-    bestDistance = distance
-    best = { wall, ux, uz, past: along < 0 ? 'start' : 'end' }
-  }
-  if (!best) return null
-  const { wall, ux, uz, past } = best
-  const keepsX = placedPoint[0] === origin[0] && Math.abs(ux) > 1e-6
-  const keepsZ = placedPoint[1] === origin[1] && Math.abs(uz) > 1e-6
-  const along = keepsX
-    ? (origin[0] - wall.start[0]) / ux
-    : keepsZ
-      ? (origin[1] - wall.start[1]) / uz
-      : (placedPoint[0] - wall.start[0]) * ux + (placedPoint[1] - wall.start[1]) * uz
-  const point: WallPlanPoint = [wall.start[0] + ux * along, wall.start[1] + uz * along]
-  // A crossing far from the cursor is not what the user is reaching for.
-  if (Math.hypot(point[0] - rawPoint[0], point[1] - rawPoint[1]) > 3 * wallMoveAlignTolerance()) {
-    return null
-  }
-  const from = past === 'start' ? wall.start : wall.end
+  const targets = walls.flatMap((wall) =>
+    wallPlanSnapTargets(wall).filter((target) => target.kind === 'ray'),
+  )
+  const reach = wallMoveAlignTolerance()
+  const holdsX = placedPoint[0] === origin[0]
+  const holdsZ = placedPoint[1] === origin[1]
+  const resolve = (along: { point: WallPlanPoint; direction: WallPlanPoint } | null) =>
+    resolvePlanPointSnap({
+      raw: rawPoint,
+      placed: placedPoint,
+      along,
+      targets,
+      reach,
+      maxShift: 3 * reach,
+    })
+  // A corner held on its starting x / z line lands where that line crosses the continuation.
+  const snap =
+    holdsX || holdsZ
+      ? resolve({ point: origin, direction: holdsX ? [0, 1] : [1, 0] })
+      : resolve(null)
+  if (snap?.target.kind !== 'ray') return null
+  const { point, target } = snap
+  const from = target.origin
+  const runsAlongX = Math.abs(target.direction[0]) >= Math.abs(target.direction[1])
   return {
     point,
     guide: {
-      axis: Math.abs(ux) >= Math.abs(uz) ? 'z' : 'x',
-      coord: Math.abs(ux) >= Math.abs(uz) ? point[1] : point[0],
+      axis: runsAlongX ? 'z' : 'x',
+      coord: runsAlongX ? point[1] : point[0],
       from: { x: from[0], z: from[1] },
       to: { x: point[0], z: point[1] },
       anchor: { x: from[0], z: from[1] },
       movingAnchorKind: 'corner',
       candidateAnchorKind: 'corner',
-      candidateNodeId: wall.id,
+      candidateNodeId: target.nodeId,
       distance: 0,
     },
   }
@@ -190,28 +203,48 @@ export function resolveDirectedCorner(
 }
 
 /**
- * Snaps a projection onto the nearest alignment target within
- * `WALL_MOVE_ALIGN_TOLERANCE`, else onto the grid (`gridStep <= 0` keeps it raw).
- * `softGrid` (Smart mode) only pulls onto a grid line when it is close.
+ * Snaps a projection onto the grid (`gridStep <= 0` keeps it raw). `softGrid`
+ * (Smart mode) only pulls onto a grid line when it is close.
  */
 export function snapWallMoveProjection(
   rawProjection: number,
-  alignTargets: readonly number[],
   gridStep: number,
   softGrid = false,
 ): number {
-  let best: number | null = null
-  let bestDistance = wallMoveAlignTolerance()
-  for (const target of alignTargets) {
-    const distance = Math.abs(rawProjection - target)
-    if (distance <= bestDistance) {
-      best = target
-      bestDistance = distance
-    }
-  }
-  if (best !== null) return best
   const gridValue = snapScalarToGrid(rawProjection, gridStep)
   return softGrid ? softSnapScalar(rawProjection, gridValue) : gridValue
+}
+
+/**
+ * Drop-time rejoins for a wall moved sideways. A rejoin that would turn the
+ * moved wall off its line (one end pulled onto a nearby corner) is dropped,
+ * so the wall lands where the drag put it; the other walls still rejoin.
+ */
+export function planSidewaysMoveRejoins(
+  nodes: Readonly<Record<string, AnyNode>>,
+  wallId: string,
+  wallIds: readonly string[],
+  radius: number,
+  changes: WallTopologyChanges,
+): WallTopologyChanges {
+  const all = planWallEndRejoins(nodes, wallIds, radius, changes)
+  const original = nodes[wallId]
+  const moved = all.update.find((entry) => entry.id === wallId)?.data as
+    | Partial<WallNode>
+    | undefined
+  if (original?.type !== 'wall' || !moved?.start || !moved.end) return all
+  const ox = original.end[0] - original.start[0]
+  const oz = original.end[1] - original.start[1]
+  const mx = moved.end[0] - moved.start[0]
+  const mz = moved.end[1] - moved.start[1]
+  const turn = Math.abs(ox * mz - oz * mx) / (Math.hypot(ox, oz) * Math.hypot(mx, mz) || 1)
+  if (turn < 1e-9) return all
+  return planWallEndRejoins(
+    nodes,
+    wallIds.filter((id) => id !== wallId),
+    radius,
+    changes,
+  )
 }
 
 export function samePoint(a: WallPlanPoint, b: WallPlanPoint) {

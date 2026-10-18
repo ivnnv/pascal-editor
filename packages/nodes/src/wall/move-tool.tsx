@@ -9,9 +9,9 @@ import {
   type GridEvent,
   getPerpendicularWallMoveAxis,
   getPlannedLinkedWallUpdates,
-  planWallEndRejoins,
   planWallMoveJunctions,
   resolveMovedWallSupportSlabPatch,
+  sidewaysMoveSnapTargets,
   useLiveNodeOverrides,
   useScene,
   type WallMoveAxis,
@@ -39,10 +39,10 @@ import {
   buildBridgeWallPreviews,
   type GhostWallPreview,
   getLinkedWallSnapshots,
-  getWallMoveAlignTargets,
   getWallsAfterUpdates,
   type LinkedWallSnapshot,
-  snapWallMoveProjection,
+  planSidewaysMoveRejoins,
+  snapWallMove,
   stripWallIsNewMetadata,
 } from './move-shared'
 
@@ -163,11 +163,16 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
   const moveAxisRef = useRef<WallMoveAxis | null>(
     getPerpendicularWallMoveAxis(node.start, node.end),
   )
-  // The other walls as the move began: the drag aligns to their endpoints.
-  const alignWallsRef = useRef<WallNode[]>(
-    Object.values(useScene.getState().nodes).filter(
-      (other): other is WallNode =>
-        other.type === 'wall' && other.parentId === node.parentId && other.id !== node.id,
+  // The other walls as the move began: the drag lines up with their ends, faces and continuations.
+  // The wall as the move began, whose lines the sideways snap lines up.
+  const snapWallRef = useRef(node)
+  const snapTargetsRef = useRef(
+    sidewaysMoveSnapTargets(
+      node,
+      Object.values(useScene.getState().nodes).filter(
+        (other): other is WallNode =>
+          other.type === 'wall' && other.parentId === node.parentId && other.id !== node.id,
+      ),
     ),
   )
   const linkedOriginalsRef = useRef<LinkedWallSnapshot[]>(
@@ -458,18 +463,18 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       let deltaX: number
       let deltaZ: number
       if (axis) {
-        const originalProj = originalCenter[0] * axis[0] + originalCenter[1] * axis[1]
-        const rawProj = originalProj + rawDeltaX * axis[0] + rawDeltaZ * axis[1]
-        const snappedProj =
+        const rawOffset = rawDeltaX * axis[0] + rawDeltaZ * axis[1]
+        const perpDelta =
           getActiveSnappingMode() === 'off'
-            ? rawProj
-            : snapWallMoveProjection(
-                rawProj,
-                getWallMoveAlignTargets(originalProj, axis, alignWallsRef.current),
-                snapStep,
-                getActiveSnappingMode() === 'smart',
-              )
-        const perpDelta = snappedProj - originalProj
+            ? rawOffset
+            : snapWallMove({
+                wall: snapWallRef.current,
+                axis,
+                rawOffset,
+                targets: snapTargetsRef.current,
+                gridStep: snapStep,
+                softGrid: getActiveSnappingMode() === 'smart',
+              }).offset
         deltaX = axis[0] * perpDelta
         deltaZ = axis[1] * perpDelta
       } else {
@@ -581,8 +586,9 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       // The drag writes nothing to the store (the preview is live overrides), so history is
       // paused only for this drop. Keyed by the moving wall: in split view the 2D move overlay
       // co-owns the gesture, and commitStep lifts its pause too.
-      const changes = planWallEndRejoins(
+      const changes = planSidewaysMoveRejoins(
         sceneState.nodes,
+        nodeId,
         commitUpdates.map(({ id }) => id),
         WALL_CONNECT_SNAP_RADIUS,
         {
