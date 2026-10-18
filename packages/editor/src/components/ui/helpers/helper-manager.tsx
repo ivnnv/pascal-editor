@@ -81,7 +81,7 @@ import { RegisteredToolHelper } from './registered-tool-helper'
 
 // Reshaping a selected node's geometry (endpoint / curve / polygon corner). The
 // snapping chip is the main control; these just name the gesture + Esc.
-function reshapingHints(reshape: ReshapeKind): ContextualShortcutHint[] {
+function reshapingHints(reshape: ReshapeKind, commandPressed: boolean): ContextualShortcutHint[] {
   const action =
     reshape === 'curve'
       ? 'Curve'
@@ -94,6 +94,16 @@ function reshapingHints(reshape: ReshapeKind): ContextualShortcutHint[] {
         : 'Move corner'
   return [
     { keys: ['Drag'], label: action },
+    // AIKAZA: the same straight-angle lock as moving walls.
+    ...(reshape === 'endpoint'
+      ? [
+          {
+            keys: ['Cmd/Ctrl'],
+            label: 'Hold to keep it straight (0/45/90°)',
+            active: commandPressed,
+          },
+        ]
+      : []),
     { keys: ['Esc'], label: 'Cancel' },
   ]
 }
@@ -544,7 +554,7 @@ export function HelperManager() {
     }
     return (
       <ContextualHelperPanel
-        hints={reshapingHints(scope.reshape)}
+        hints={reshapingHints(scope.reshape, modifiers.command)}
         snapContext={snapContext}
         title={title}
       />

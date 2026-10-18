@@ -374,6 +374,15 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           }
         }
 
+        // AIKAZA: Cmd/Ctrl keeps the wall straight (0/45/90° off its fixed corner), with no
+        // other snapping, the same lock as moving walls.
+        const straight = modifiers.metaKey || modifiers.ctrlKey
+        if (straight) {
+          placed = straightFrom(fixedPoint, planPoint as WallPlanPoint)
+          onExtension = false
+          useAlignmentGuides.getState().clear()
+        }
+
         // The dragged corner squares against the walls that move with it, and
         // shows the angle it makes there (and at the fixed corner).
         const movingWalls = modifiers.altKey
@@ -387,6 +396,7 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
         // A wall already true to a plan axis keeps it.
         if (
           getActiveSnappingMode() !== 'off' &&
+          !straight &&
           !snapResult.snap &&
           !atOrigin &&
           !onExtension &&
@@ -509,4 +519,13 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
       },
     }
   },
+}
+
+function straightFrom(fixed: WallPlanPoint, point: WallPlanPoint): WallPlanPoint {
+  const dx = point[0] - fixed[0]
+  const dz = point[1] - fixed[1]
+  if (Math.hypot(dx, dz) < 1e-9) return point
+  const angle = Math.round(Math.atan2(dz, dx) / (Math.PI / 4)) * (Math.PI / 4)
+  const along = dx * Math.cos(angle) + dz * Math.sin(angle)
+  return [fixed[0] + Math.cos(angle) * along, fixed[1] + Math.sin(angle) * along]
 }

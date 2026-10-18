@@ -23,18 +23,18 @@ describe('resolveSelectModeHelpHints', () => {
     ).toEqual([])
   })
 
-  test('shows multi-select guidance when a modifier is held without selection', () => {
+  test('shows multi-select guidance when Shift is held without selection', () => {
     expect(
       resolveSelectModeHelpHints({
         selectedCount: 0,
         hasMovableSelection: false,
         hasRotatableSelection: false,
-        commandPressed: true,
-        shiftPressed: false,
+        commandPressed: false,
+        shiftPressed: true,
       }),
     ).toEqual([
       {
-        keys: [['Cmd/Ctrl', 'Shift'], 'Left click'],
+        keys: ['Shift', 'Left click'],
         label: 'Add or remove objects from the selection',
         active: true,
       },
@@ -61,7 +61,7 @@ describe('resolveSelectModeHelpHints', () => {
     // Cmd/Ctrl and Shift click both toggle selection membership (3D selection
     // manager and 2D floorplan alike) — advertised as a single or-group row.
     expect(hints).toContainEqual({
-      keys: [['Cmd/Ctrl', 'Shift'], 'Left click'],
+      keys: ['Shift', 'Left click'],
       label: 'Add or remove objects from the selection',
       active: false,
     })
@@ -81,6 +81,11 @@ describe('resolveSelectModeHelpHints', () => {
         keys: ['Left click'],
         label: 'Click or drag the selection to move it as one',
       },
+      {
+        keys: ['Cmd/Ctrl'],
+        label: 'Hold while dragging to keep it straight (0/45/90°)',
+        active: false,
+      },
       { keys: ['R / T'], label: 'Rotate the selection ±45°' },
       {
         keys: ['Cmd/Ctrl', 'G'],
@@ -91,7 +96,7 @@ describe('resolveSelectModeHelpHints', () => {
         label: 'Ungroup session selection',
       },
       {
-        keys: [['Cmd/Ctrl', 'Shift'], 'Left click'],
+        keys: ['Shift', 'Left click'],
         label: 'Add or remove objects from the selection',
         active: false,
       },
@@ -99,7 +104,7 @@ describe('resolveSelectModeHelpHints', () => {
     ])
   })
 
-  test('holding a modifier keeps the same rows and only lights the selection one', () => {
+  test('holding modifiers keeps the same rows and lights the ones they drive', () => {
     // Guides/snapping are governed by the snapping mode (Shift toggles it),
     // so no modifier-specific "freely / with guides / bypass" variants exist.
     const hints = resolveSelectModeHelpHints({
@@ -116,11 +121,16 @@ describe('resolveSelectModeHelpHints', () => {
         label: 'Drag selected movable object',
       },
       {
+        keys: ['Cmd/Ctrl'],
+        label: 'Hold while dragging to keep it straight (0/45/90°)',
+        active: true,
+      },
+      {
         keys: ['Cmd/Ctrl', 'Right click'],
         label: 'Drag left or right to rotate selected object',
       },
       {
-        keys: [['Cmd/Ctrl', 'Shift'], 'Left click'],
+        keys: ['Shift', 'Left click'],
         label: 'Add or remove objects from the selection',
         active: true,
       },

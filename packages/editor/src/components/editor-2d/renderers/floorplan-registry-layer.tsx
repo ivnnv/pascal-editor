@@ -792,7 +792,8 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       if (event.button !== 0) return
       event.stopPropagation()
       applyEntrySelection(id, {
-        shouldToggle: event.metaKey || event.ctrlKey || event.shiftKey,
+        // AIKAZA: Shift only; Cmd/Ctrl is the straight-angle lock.
+        shouldToggle: event.shiftKey,
         isolateMember: event.altKey && !(event.metaKey || event.ctrlKey || event.shiftKey),
       })
     },
@@ -879,7 +880,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         cleanup()
         if (!engaged) {
           applyEntrySelection(id, {
-            shouldToggle: commandModifier,
+            shouldToggle: false,
             isolateMember: false,
           })
         }
@@ -1003,7 +1004,8 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const startGroupMoveDrag = useCallback(
     (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>, immediate = false): boolean => {
       if (event.button !== 0) return false
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false
+      // AIKAZA: Cmd/Ctrl still drags the group (locked straight); Shift toggles membership.
+      if (event.shiftKey || event.altKey) return false
       if (movingNode) return false
       if (useEditor.getState().mode === 'delete') return false
       const started = startFloorplanGroupMove(id, event, {

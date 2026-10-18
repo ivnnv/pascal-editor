@@ -612,7 +612,8 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
   // the entries underneath (toggle membership) instead of starting a drag.
   const [modifierHeld, setModifierHeld] = useState(false)
   useEffect(() => {
-    const update = (e: KeyboardEvent) => setModifierHeld(e.metaKey || e.ctrlKey || e.shiftKey)
+    // AIKAZA: only Shift toggles membership; Cmd/Ctrl drags the group straight.
+    const update = (e: KeyboardEvent) => setModifierHeld(e.shiftKey)
     const clear = () => setModifierHeld(false)
     window.addEventListener('keydown', update)
     window.addEventListener('keyup', update)

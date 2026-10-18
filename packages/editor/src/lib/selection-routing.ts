@@ -107,8 +107,10 @@ export function resolveCanvasSelectionNode({
   return target
 }
 
+// AIKAZA: only Shift adds to / removes from the selection on the canvas; Cmd/Ctrl is the
+// straight-angle lock while moving.
 export function isSelectionModifierActive(keys: SelectionModifierKeys): boolean {
-  return keys.meta || keys.ctrl || keys.shift
+  return keys.shift
 }
 
 export function selectionModifiersFromEvent(

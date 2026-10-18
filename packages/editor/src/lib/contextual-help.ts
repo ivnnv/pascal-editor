@@ -73,10 +73,10 @@ export function resolveSelectModeHelpHints({
   const hints: ContextualShortcutHint[] = []
 
   if (selectedCount === 0) {
-    if (!commandPressed && !shiftPressed) return hints
+    if (!shiftPressed) return hints
 
     hints.push({
-      keys: [[COMMAND_KEY, SHIFT_KEY], LEFT_CLICK],
+      keys: [SHIFT_KEY, LEFT_CLICK],
       label: 'Add or remove objects from the selection',
       active: true,
     })
@@ -91,6 +91,11 @@ export function resolveSelectModeHelpHints({
       keys: [LEFT_CLICK],
       label: 'Click or drag the selection to move it as one',
     })
+    hints.push({
+      keys: [COMMAND_KEY],
+      label: 'Hold while dragging to keep it straight (0/45/90°)',
+      active: commandPressed,
+    })
     hints.push({ keys: [ROTATE_KEYS], label: 'Rotate the selection ±45°' })
     hints.push({
       keys: [COMMAND_KEY, 'G'],
@@ -101,9 +106,9 @@ export function resolveSelectModeHelpHints({
       label: 'Ungroup session selection',
     })
     hints.push({
-      keys: [[COMMAND_KEY, SHIFT_KEY], LEFT_CLICK],
+      keys: [SHIFT_KEY, LEFT_CLICK],
       label: 'Add or remove objects from the selection',
-      active: commandPressed || shiftPressed,
+      active: shiftPressed,
     })
     hints.push({ keys: [ESC_KEY], label: 'Clear the selection (or click outside)' })
     return hints
@@ -134,6 +139,15 @@ export function resolveSelectModeHelpHints({
     })
   }
 
+  // AIKAZA: the same straight-angle lock as the group move.
+  if (hasMovableSelection) {
+    hints.push({
+      keys: [COMMAND_KEY],
+      label: 'Hold while dragging to keep it straight (0/45/90°)',
+      active: commandPressed,
+    })
+  }
+
   if (hasRotatableSelection) {
     hints.push({
       keys: [COMMAND_KEY, RIGHT_CLICK],
@@ -150,9 +164,9 @@ export function resolveSelectModeHelpHints({
   }
 
   hints.push({
-    keys: [[COMMAND_KEY, SHIFT_KEY], LEFT_CLICK],
+    keys: [SHIFT_KEY, LEFT_CLICK],
     label: 'Add or remove objects from the selection',
-    active: commandPressed || shiftPressed,
+    active: shiftPressed,
   })
 
   return hints

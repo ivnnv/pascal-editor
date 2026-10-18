@@ -29,6 +29,7 @@ import { nodeLevelFrame } from '@pascal-app/core/procedural-items'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo } from 'react'
 import { commitFreshPlacementSubtree } from '../../lib/fresh-planar-placement'
+import { isGroupMoveLockKey } from '../../lib/group-move-snap'
 import { isHistoryShortcut } from '../../lib/history'
 import { isFreshPlacementMetadata, stripPlacementMetadataFlags } from '../../lib/placement-metadata'
 import { resolvePrioritizedPlanarCursorPosition } from '../../lib/planar-cursor-placement'
@@ -38,6 +39,7 @@ import {
 } from '../../lib/rigid-plan-svg-transform'
 import { movementSfxStepKey } from '../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { useSnappingHold } from '../../lib/snapping-hold'
 import { surfaceAttachmentId } from '../../lib/surface-attachment'
 import { isTypingTarget } from '../../lib/typing-target'
 import { resolveAlignmentForFloorplanView } from '../../lib/world-grid-snap'
@@ -53,6 +55,7 @@ import useInteractionScope, {
 } from '../../store/use-interaction-scope'
 import usePlacementPreview from '../../store/use-placement-preview'
 import { useWallMoveGhosts } from '../../store/use-wall-move-ghosts'
+import { lockGroupDelta } from '../editor/group-transform-shared'
 
 // Figma-style alignment snap threshold. Meters in world space; 8cm gives
 // a comfortable "magnetic" pull at default zoom without fighting the
@@ -241,6 +244,7 @@ export function FloorplanRegistryMoveOverlay() {
       }
 
       let rejectionIndicator: SVGCircleElement | null = null
+      let lockOrigin: [number, number] | null = null
       let lastPlanPoint: [number, number] | null = null
       const clearRejection = () => {
         rejectionIndicator?.remove()
@@ -269,22 +273,38 @@ export function FloorplanRegistryMoveOverlay() {
         // only updated the shelf when it happened to brush over an
         // existing SVG entry, leaving the move feeling "stuck" elsewhere.
         if (!isPointerOverFloorplanScene(event)) return
-        const planPoint = toMeters(event.clientX, event.clientY)
-        if (!planPoint) return
+        const cursorPoint = toMeters(event.clientX, event.clientY)
+        if (!cursorPoint) return
+        // AIKAZA: Cmd/Ctrl keeps the move on a 0/45/90° line from where it started, unsnapped.
+        lockOrigin ??= cursorPoint
+        const lock = isGroupMoveLockKey(event)
+        const lockedDelta = lock
+          ? lockGroupDelta(cursorPoint[0] - lockOrigin[0], cursorPoint[1] - lockOrigin[1])
+          : null
+        const planPoint: [number, number] = lockedDelta
+          ? [lockOrigin[0] + lockedDelta[0], lockOrigin[1] + lockedDelta[1]]
+          : cursorPoint
         hasMovedSinceStart = true
         lastPlanPoint = planPoint
         clearRejection()
-        ownWrite(() =>
-          session.apply({
-            planPoint,
-            modifiers: {
-              shiftKey: event.shiftKey,
-              altKey: event.altKey,
-              ctrlKey: event.ctrlKey,
-              metaKey: event.metaKey,
-            },
-          }),
-        )
+        const snappingHold = useSnappingHold.getState()
+        const wasHeld = snappingHold.held
+        if (lock && !wasHeld) snappingHold.setHeld(true)
+        try {
+          ownWrite(() =>
+            session.apply({
+              planPoint,
+              modifiers: {
+                shiftKey: event.shiftKey,
+                altKey: event.altKey,
+                ctrlKey: event.ctrlKey,
+                metaKey: event.metaKey,
+              },
+            }),
+          )
+        } finally {
+          if (lock && !wasHeld) snappingHold.setHeld(false)
+        }
         // Move "tick" — same feedback the 3D move gives, which fires whenever the
         // resolved position changes (any snapping mode, not just grid), so it
         // ticks as the item lands on each new snapped/free position.
