@@ -232,7 +232,7 @@ export type PlanPointSnap = { point: [number, number]; target: PlanSnapTarget }
  * A dragged point pulled onto the nearest continuation within `reach` of the
  * raw pointer. With `along` (the line the point is held on) it lands where
  * that line crosses the continuation, otherwise straight across from `placed`.
- * A landing further than `maxShift` from the pointer is no snap.
+ * A landing off `along`, or further than `maxShift` from the pointer, is no snap.
  */
 export function resolvePlanPointSnap(input: {
   raw: PlanVec
@@ -242,8 +242,8 @@ export function resolvePlanPointSnap(input: {
   reach: number
   maxShift: number
 }): PlanPointSnap | null {
-  let best: { target: Extract<PlanSnapTarget, { kind: 'ray' }>; direction: PlanVec } | null = null
-  let bestDistance = input.reach
+  const along = input.along ? unit(input.along.direction) : null
+  let best: (PlanPointSnap & { distance: number }) | null = null
   for (const target of input.targets) {
     if (target.kind !== 'ray') continue
     const direction = unit(target.direction)
@@ -251,23 +251,23 @@ export function resolvePlanPointSnap(input: {
     const offset = sub(input.raw, target.origin)
     if (dot(offset, direction) <= 0) continue
     const distance = Math.abs(cross(offset, direction))
-    if (distance > bestDistance) continue
-    bestDistance = distance
-    best = { target, direction }
+    if (distance > input.reach || (best && distance >= best.distance)) continue
+    let point: [number, number]
+    if (input.along && along) {
+      // Held on a line: only a continuation that crosses it can take the point.
+      const turn = cross(direction, along)
+      if (Math.abs(turn) <= PARALLEL_EPSILON) continue
+      const t = cross(sub(input.along.point, target.origin), along) / turn
+      point = [target.origin[0] + direction[0] * t, target.origin[1] + direction[1] * t]
+    } else {
+      const t = dot(sub(input.placed, target.origin), direction)
+      point = [target.origin[0] + direction[0] * t, target.origin[1] + direction[1] * t]
+    }
+    if (Math.hypot(point[0] - input.raw[0], point[1] - input.raw[1]) > input.maxShift) continue
+    best = { point, target, distance }
   }
   if (!best) return null
-  const { target, direction } = best
-  const along = input.along ? unit(input.along.direction) : null
-  let point: [number, number]
-  if (input.along && along && Math.abs(cross(along, direction)) > PARALLEL_EPSILON) {
-    const t = cross(sub(input.along.point, target.origin), along) / cross(direction, along)
-    point = [target.origin[0] + direction[0] * t, target.origin[1] + direction[1] * t]
-  } else {
-    const t = dot(sub(input.placed, target.origin), direction)
-    point = [target.origin[0] + direction[0] * t, target.origin[1] + direction[1] * t]
-  }
-  if (Math.hypot(point[0] - input.raw[0], point[1] - input.raw[1]) > input.maxShift) return null
-  return { point, target }
+  return { point: best.point, target: best.target }
 }
 
 /** The guide from the target to the lined-up edge, when that edge runs along a plan axis. */

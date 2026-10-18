@@ -42,7 +42,7 @@ import { resolveResizeSnapValue } from '../components/editor/handles/resize-snap
 import { swallowNextClick } from '../components/editor/handles/use-handle-drag'
 import { getRoomSelectionIndex } from '../hooks/use-selected-room'
 import useAlignmentGuides from '../store/use-alignment-guides'
-import useEditor, { isGridSnapActive } from '../store/use-editor'
+import useEditor, { getActiveSnappingMode, isGridSnapActive } from '../store/use-editor'
 import { useWallMoveGhosts } from '../store/use-wall-move-ghosts'
 import useWallSnapIndicator from '../store/use-wall-snap-indicator'
 import { footprintHeightPatch, footprintHeightValue } from './floor-footprints'
@@ -963,7 +963,7 @@ export function runWallPushDrag({
   const toDistance = (at: number | null) => {
     if (at === null) return null
     const raw = at - from
-    if (!isGridSnapActive()) return raw
+    if (getActiveSnappingMode() === 'off') return raw
     const metresPerPixel = getPlanSnapScale()
     const reach = metresPerPixel
       ? planSnapReach(PUSH_ALIGN_REACH_PX, metresPerPixel, PUSH_ALIGN_MAX)
