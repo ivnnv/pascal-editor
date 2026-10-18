@@ -45,7 +45,9 @@ import {
   collectParticipants,
   computeGroupBox,
   groupPlanBounds,
+  groupWallAlignmentAnchors,
   levelFrame,
+  lockGroupDelta,
   planBoundsCenter,
   rotateGroupSnapshots,
   rotatePlanBounds,
@@ -136,6 +138,8 @@ export function startGroupPickUp(
     restBounds.maxX,
     restBounds.maxZ,
   )
+  // AIKAZA: the moved walls' faces align with their neighbours' too.
+  restAnchors.push(...groupWallAlignmentAnchors(starts, nodes))
 
   // Cursor → level-frame plan point, whichever surface the pointer is over.
   const ndc = new Vector2()
@@ -202,7 +206,11 @@ export function startGroupPickUp(
     let dx = snap ? Math.round(rawDx / step) * step : rawDx
     let dz = snap ? Math.round(rawDz / step) * step : rawDz
 
-    if (isAlignmentGuideActive() && candidates.length > 0 && restAnchors.length > 0) {
+    // AIKAZA: Cmd/Ctrl held keeps the move straight (0/45/90°), with no grid or alignment snap.
+    const locked = e.ctrlKey || e.metaKey ? lockGroupDelta(rawDx, rawDz) : null
+    if (locked) [dx, dz] = locked
+
+    if (!locked && isAlignmentGuideActive() && candidates.length > 0 && restAnchors.length > 0) {
       const result = resolveAlignment({
         moving: restAnchors.map((a) => ({ ...a, x: a.x + dx, z: a.z + dz })),
         candidates,
@@ -285,6 +293,7 @@ export function startGroupPickUp(
     window.removeEventListener('pointerdown', onPointerDown, true)
     window.removeEventListener('pointerup', onPointerUp, true)
     window.removeEventListener('keydown', onKeyDown, true)
+    window.removeEventListener('keyup', onLockKey, true)
     window.removeEventListener('contextmenu', onContextMenu, true)
   }
 
@@ -328,8 +337,25 @@ export function startGroupPickUp(
     opts.onCancel?.()
   }
 
+  let lastMove: PointerEvent | null = null
   const onMove = (e: PointerEvent) => {
+    lastMove = e
     applyMove(e)
+  }
+
+  // AIKAZA: pressing or releasing Cmd/Ctrl mid-move re-applies the move with or without the lock.
+  const onLockKey = (e: KeyboardEvent) => {
+    if ((e.key !== 'Control' && e.key !== 'Meta') || !lastMove) return
+    // The lock key's release must not also count as a clean tap that cycles the grid step.
+    if (e.type === 'keyup') e.preventDefault()
+    const m = lastMove
+    applyMove(
+      new PointerEvent('pointermove', {
+        clientX: m.clientX,
+        clientY: m.clientY,
+        ctrlKey: e.type === 'keydown',
+      }),
+    )
   }
 
   // Capture phase: commit before the press reaches selection / tools, so the
@@ -372,6 +398,7 @@ export function startGroupPickUp(
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (isTypingTarget(e.target)) return
+    onLockKey(e)
     const key = e.key.toLowerCase()
     if ((e.metaKey || e.ctrlKey) && (key === 'c' || key === 'v' || key === 'x')) {
       // A clipboard chord replaces the current carry. Let the global keyboard
@@ -412,6 +439,7 @@ export function startGroupPickUp(
   window.addEventListener('pointerdown', onPointerDown, true)
   window.addEventListener('pointerup', onPointerUp, true)
   window.addEventListener('keydown', onKeyDown, true)
+  window.addEventListener('keyup', onLockKey, true)
   window.addEventListener('contextmenu', onContextMenu, true)
   return true
 }

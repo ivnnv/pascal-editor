@@ -179,6 +179,7 @@ export function FloorplanDimensionRenderer({
   annotationUnitsPerPoint,
   renderMode = 'screen',
   onSelect,
+  readOnly = false,
 }: {
   geometry: DimensionGeometry
   sceneRotationDeg?: number
@@ -186,6 +187,8 @@ export function FloorplanDimensionRenderer({
   annotationUnitsPerPoint?: number
   renderMode?: FloorplanDimensionRenderMode
   onSelect?: () => void
+  /** AIKAZA: a readout only (no click-to-type target), e.g. the group selection box. */
+  readOnly?: boolean
 }): React.ReactElement | null {
   const layout = computeArchitecturalDimensionLayout(
     geometry,
@@ -320,6 +323,7 @@ export function FloorplanDimensionRenderer({
           // packages/core/src/registry/types.ts; the cast keeps this file
           // compiling against a core dist built before that field landed.
           overridden={(geometry as { overridden?: boolean }).overridden === true}
+          readOnly={readOnly}
           renderMode={renderMode}
           stroke={stroke}
           text={geometry.text}
@@ -535,8 +539,10 @@ function DimensionLabel({
   stroke,
   renderMode,
   overridden = false,
+  readOnly = false,
 }: {
   text: string
+  readOnly?: boolean
   y: number
   fontSize: number
   stroke: string
@@ -598,7 +604,7 @@ function DimensionLabel({
           override
         </text>
       ) : null}
-      {renderMode === 'pdf' || !editable ? null : (
+      {renderMode === 'pdf' || !editable || readOnly ? null : (
         // Invisible click target on the plate. `pointer-events` is inherited
         // from the dimension group (`none`), so it is re-enabled here only.
         <rect

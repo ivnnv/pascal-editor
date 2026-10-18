@@ -41,7 +41,9 @@ import {
   computeGroupPlanBox,
   type GroupPlanBounds,
   groupPlanBounds,
+  groupWallAlignmentAnchors,
   levelFrame,
+  lockGroupDelta,
   planBoundsCenter,
   rotateGroupPatches,
   rotateGroupSnapshots,
@@ -154,6 +156,8 @@ export function startFloorplanGroupMove(
       restBounds.maxX,
       restBounds.maxZ,
     )
+    // AIKAZA: the moved walls' faces align with their neighbours' too.
+    restAnchors.push(...groupWallAlignmentAnchors(starts, nodes))
 
     for (const id of affectedIds) {
       useLiveTransforms.getState().clear(id)
@@ -200,9 +204,19 @@ export function startFloorplanGroupMove(
     let dx = snap ? Math.round((plan[0] - startPlan[0]) / step) * step : plan[0] - startPlan[0]
     let dz = snap ? Math.round((plan[1] - startPlan[1]) / step) * step : plan[1] - startPlan[1]
 
+    // AIKAZA: Cmd/Ctrl held keeps the move straight (0/45/90°), with no grid or alignment snap.
+    const locked =
+      e.ctrlKey || e.metaKey ? lockGroupDelta(plan[0] - startPlan[0], plan[1] - startPlan[1]) : null
+    if (locked) [dx, dz] = locked
+
     // Figma-style alignment layered on top: guides display in every mode
     // except Off; the magnetic pull applies only in 'lines' mode.
-    if (isAlignmentGuideActive() && s.candidates.length > 0 && s.restAnchors.length > 0) {
+    if (
+      !locked &&
+      isAlignmentGuideActive() &&
+      s.candidates.length > 0 &&
+      s.restAnchors.length > 0
+    ) {
       const proposed: [number, number] = [startPlan[0] + dx, startPlan[1] + dz]
       const aligned = applyFloorplanAlignment(
         proposed,
@@ -285,6 +299,7 @@ export function startFloorplanGroupMove(
     window.removeEventListener('pointerup', onUp, true)
     window.removeEventListener('pointercancel', onPointerCancel)
     window.removeEventListener('keydown', onKeyDown, true)
+    window.removeEventListener('keyup', onCtrlToggle, true)
   }
 
   // History resume is NOT here — it pairs exactly one-to-one with the
@@ -302,8 +317,10 @@ export function startFloorplanGroupMove(
     useFloorplanGroupDrag.getState().set(null)
   }
 
+  let lastMove: PointerEvent | null = null
   const onMove = (e: PointerEvent) => {
     if (e.pointerId !== pointerId) return
+    lastMove = e
     if (!session) {
       if (Math.hypot(e.clientX - startX, e.clientY - startY) < DRAG_THRESHOLD_PX) return
       session = engage()
@@ -368,8 +385,25 @@ export function startFloorplanGroupMove(
   // Capture phase so the drag's Escape wins over the global `use-keyboard`
   // Escape arm (registered earlier on window in the bubble phase), which
   // would otherwise clear the multi-selection mid-cancel.
+  // AIKAZA: pressing or releasing Cmd/Ctrl mid-drag re-applies the move with or without the lock.
+  const onCtrlToggle = (e: KeyboardEvent) => {
+    if ((e.key !== 'Control' && e.key !== 'Meta') || !session || !lastMove) return
+    // The lock key's release must not also count as a clean tap that cycles the grid step.
+    if (e.type === 'keyup') e.preventDefault()
+    const m = lastMove
+    applyMove(
+      new PointerEvent('pointermove', {
+        clientX: m.clientX,
+        clientY: m.clientY,
+        ctrlKey: e.type === 'keydown',
+      }),
+      session,
+    )
+  }
+
   const onKeyDown = (e: KeyboardEvent) => {
     if (isTypingTarget(e.target)) return
+    onCtrlToggle(e)
     const key = e.key.toLowerCase()
     if ((key === 'r' || key === 't') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
       // Armed but still under the drag threshold: engage first (exactly what
@@ -411,6 +445,7 @@ export function startFloorplanGroupMove(
   window.addEventListener('pointerup', onUp, true)
   window.addEventListener('pointercancel', onPointerCancel)
   window.addEventListener('keydown', onKeyDown, true)
+  window.addEventListener('keyup', onCtrlToggle, true)
 
   if (opts.immediate) {
     session = engage()
@@ -699,6 +734,22 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
     text: formatLinearMeasurement(box.depth, unit, metricNotation),
     stroke,
   } satisfies Extract<FloorplanGeometry, { kind: 'dimension' }>
+  // AIKAZA: live move offset, drawn from where the box started to where it is now
+  // (the group <g> is translated by the delta, so the start sits at -delta).
+  const deltaLength = delta ? Math.hypot(delta[0], delta[1]) : 0
+  const offsetDimension =
+    delta && deltaLength > 1e-6
+      ? ({
+          kind: 'dimension',
+          start: [box.x + box.width / 2 - delta[0], box.z + box.depth / 2 - delta[1]],
+          end: [box.x + box.width / 2, box.z + box.depth / 2],
+          offsetNormal: [-delta[1] / deltaLength, delta[0] / deltaLength],
+          offsetDistance: 0,
+          extensionOvershoot: 0,
+          text: formatLinearMeasurement(deltaLength, unit, metricNotation),
+          stroke,
+        } satisfies Extract<FloorplanGeometry, { kind: 'dimension' }>)
+      : null
   // Mid-gesture the box rides the live delta (group move) or spins around the
   // rotation pivot (corner rotate) — SVG rotate() is degrees around a plan
   // point, and positive matches the atan2 x→z sense on the y-down plan.
@@ -729,10 +780,21 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
         <g pointerEvents="none">
           <FloorplanDimensionRenderer
             geometry={widthDimension}
+            readOnly
             sceneRotationDeg={sceneRotationDeg}
           />
           <FloorplanDimensionRenderer
             geometry={depthDimension}
+            readOnly
+            sceneRotationDeg={sceneRotationDeg}
+          />
+        </g>
+      ) : null}
+      {offsetDimension ? (
+        <g pointerEvents="none">
+          <FloorplanDimensionRenderer
+            geometry={offsetDimension}
+            readOnly
             sceneRotationDeg={sceneRotationDeg}
           />
         </g>

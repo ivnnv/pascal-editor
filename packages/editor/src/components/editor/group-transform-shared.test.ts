@@ -29,6 +29,8 @@ import {
   collectParticipants,
   computeGroupPlanBox,
   groupPlanBounds,
+  groupWallAlignmentAnchors,
+  lockGroupDelta,
   planBoundsCenter,
   rotateGroupPatches,
   rotateGroupSnapshots,
@@ -1055,5 +1057,48 @@ describe('floorplan group rotation keyboard ownership', () => {
       useScene.temporal.getState().undo()
       expect(useScene.getState().nodes).toEqual(before.nodes)
     })
+  })
+})
+
+describe('lockGroupDelta', () => {
+  const close = (actual: [number, number] | null, expected: [number, number]) => {
+    expect(actual).not.toBeNull()
+    expect(actual![0]).toBeCloseTo(expected[0], 9)
+    expect(actual![1]).toBeCloseTo(expected[1], 9)
+  }
+
+  test('keeps a near-vertical drag exactly vertical, at its full length along that axis', () => {
+    close(lockGroupDelta(0.012, -0.16), [0, -0.16])
+  })
+
+  test('pins a drag between the axes to the nearest 45°', () => {
+    const d = 0.2
+    close(lockGroupDelta(d, d * 0.8), [(d * 1.8) / 2, (d * 1.8) / 2])
+  })
+
+  test('leaves no movement unlocked', () => {
+    expect(lockGroupDelta(0, 0)).toBeNull()
+  })
+})
+
+describe('groupWallAlignmentAnchors', () => {
+  test('gives the moved walls their ends and both face lines, and nothing for other kinds', () => {
+    const wall = WallNode.parse({ start: [0, 0], end: [2, 0], thickness: 0.2 })
+    const slab = SlabNode.parse({
+      polygon: [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+      ],
+    })
+    const nodes = { [wall.id]: wall, [slab.id]: slab } as Record<string, AnyNode>
+    const anchors = groupWallAlignmentAnchors(
+      [{ id: wall.id as AnyNodeId }, { id: slab.id as AnyNodeId }],
+      nodes,
+    )
+    expect(anchors.length).toBeGreaterThan(0)
+    const zs = new Set(anchors.map((a) => Math.round(a.z * 1000) / 1000))
+    expect(zs.has(0.1)).toBe(true)
+    expect(zs.has(-0.1)).toBe(true)
   })
 })

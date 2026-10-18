@@ -417,7 +417,15 @@ export function HelperManager() {
   if (activeHandleDrag?.label === GROUP_MOVE_DRAG_LABEL) {
     return (
       <ContextualHelperPanel
-        hints={[{ keys: ['R / T'], label: 'Rotate the selection ±45°' }]}
+        hints={[
+          { keys: ['R / T'], label: 'Rotate the selection ±45°' },
+          // AIKAZA: the angle lock held mid-drag (floorplan-group-move).
+          {
+            keys: ['Cmd/Ctrl'],
+            label: 'Hold to keep the move straight (0/45/90°), no snapping',
+            active: modifiers.command,
+          },
+        ]}
         snapContext={snapContext}
         title={MOVE_SELECTION_HUD_TITLE}
       />

@@ -1,8 +1,10 @@
 import {
+  type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
   calculateLevelMiters,
   getWallPlanFootprint,
+  nodeAlignmentAnchors,
   nodeRegistry,
   resolveBuildingForLevel,
   sceneRegistry,
@@ -24,6 +26,26 @@ const JUNCTION_EPS = 1e-4
 
 export type Vec2 = [number, number]
 export type Vec3 = [number, number, number]
+
+/** A move delta pinned to the nearest 0/45/90° direction (the Cmd/Ctrl lock); null for no movement. */
+export function lockGroupDelta(dx: number, dz: number): Vec2 | null {
+  if (Math.hypot(dx, dz) < 1e-9) return null
+  const angle = Math.round(Math.atan2(dz, dx) / (Math.PI / 4)) * (Math.PI / 4)
+  const dir: Vec2 = [Math.cos(angle), Math.sin(angle)]
+  const length = dx * dir[0] + dz * dir[1]
+  return [dir[0] * length, dir[1] * length]
+}
+
+/** Ends and face corners of the moved walls, so a group can align a wall face with a neighbour's. */
+export function groupWallAlignmentAnchors(
+  starts: readonly { id: AnyNodeId }[],
+  nodes: Readonly<Record<string, AnyNode>>,
+): AlignmentAnchor[] {
+  return starts.flatMap(({ id }) => {
+    const node = nodes[id]
+    return node?.type === 'wall' ? nodeAlignmentAnchors(node, nodes) : []
+  })
+}
 
 const isVec3 = (v: unknown): v is Vec3 =>
   Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === 'number')
