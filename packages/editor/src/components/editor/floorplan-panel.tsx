@@ -278,9 +278,6 @@ const GRID_COORDINATE_PRECISION = 6
 const MAJOR_GRID_STEP = WALL_GRID_STEP * 2
 const FLOORPLAN_MINOR_GRID_STROKE_WIDTH = 0.14
 const FLOORPLAN_MAJOR_GRID_STROKE_WIDTH = 0.26
-const FLOORPLAN_WALL_THICKNESS_SCALE = 1.18
-const FLOORPLAN_MIN_VISIBLE_WALL_THICKNESS = 0.13
-const FLOORPLAN_MAX_EXTRA_THICKNESS = 0.035
 const FLOORPLAN_PANEL_LAYOUT_STORAGE_KEY = 'pascal-editor-floorplan-panel-layout'
 const EMPTY_WALL_MITER_DATA = calculateLevelMiters([])
 const EDITOR_CURSOR = "url('/cursor.svg') 4 2, default"
@@ -2408,24 +2405,6 @@ function getLinkedWallUpdates(
 
 function getWallEndpointDraftUpdates(draft: WallEndpointDraft): LinkedWallSnapshot[] {
   return [{ id: draft.wallId, start: draft.start, end: draft.end }, ...draft.linkedWalls]
-}
-
-function getFloorplanWallThickness(wall: WallNode): number {
-  const baseThickness = wall.thickness ?? 0.1
-  const scaledThickness = baseThickness * FLOORPLAN_WALL_THICKNESS_SCALE
-
-  return Math.min(
-    baseThickness + FLOORPLAN_MAX_EXTRA_THICKNESS,
-    Math.max(baseThickness, scaledThickness, FLOORPLAN_MIN_VISIBLE_WALL_THICKNESS),
-  )
-}
-
-function getFloorplanWall(wall: WallNode): WallNode {
-  return {
-    ...wall,
-    // Slightly exaggerate thin walls so the 2D blueprint reads clearly without drifting far from BIM.
-    thickness: getFloorplanWallThickness(wall),
-  }
 }
 
 function formatMeasurement(
@@ -5398,7 +5377,7 @@ export function FloorplanPanel({
     guideInteractionRef.current,
     guideTransformDraft,
   )
-  const floorplanWalls = useMemo(() => walls.map(getFloorplanWall), [walls])
+  const floorplanWalls = useMemo(() => walls.map(getSharedFloorplanWall), [walls])
   const wallMiterData = useMemo(() => calculateLevelMiters(floorplanWalls), [floorplanWalls])
   const wallById = useMemo(() => new Map(walls.map((wall) => [wall.id, wall] as const)), [walls])
   const floorplanWallById = useMemo(
@@ -5450,7 +5429,7 @@ export function FloorplanPanel({
           continue
         }
 
-        nextFloorplanWallById.set(previewWall.id, getFloorplanWall(previewWall))
+        nextFloorplanWallById.set(previewWall.id, getSharedFloorplanWall(previewWall))
         hasPreviewWalls = true
       }
     }
@@ -5458,7 +5437,7 @@ export function FloorplanPanel({
     if (wallCurveDraft) {
       const previewWall = displayWallById.get(wallCurveDraft.wallId)
       if (previewWall) {
-        nextFloorplanWallById.set(previewWall.id, getFloorplanWall(previewWall))
+        nextFloorplanWallById.set(previewWall.id, getSharedFloorplanWall(previewWall))
         hasPreviewWalls = true
       }
     }
@@ -5542,14 +5521,14 @@ export function FloorplanPanel({
     const referenceDescendants = referenceFloorDescendants
     const referenceDescendantById = new Map(referenceDescendants.map((node) => [node.id, node]))
 
-    const referenceFloorplanWalls = referenceWalls.map(getFloorplanWall)
+    const referenceFloorplanWalls = referenceWalls.map(getSharedFloorplanWall)
     const referenceWallMiterData = calculateLevelMiters(referenceFloorplanWalls)
     const referenceFloorplanWallById = new Map(
       referenceFloorplanWalls.map((wall) => [wall.id, wall] as const),
     )
 
     const wallPolygons = referenceWalls.map((wall) => {
-      const floorplanWall = referenceFloorplanWallById.get(wall.id) ?? getFloorplanWall(wall)
+      const floorplanWall = referenceFloorplanWallById.get(wall.id) ?? getSharedFloorplanWall(wall)
       const polygon = getWallPlanFootprint(floorplanWall, referenceWallMiterData)
 
       return {
