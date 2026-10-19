@@ -14,6 +14,7 @@ import {
 import {
   type MezzanineEdgeHandle,
   mezzanineEdgeHandles,
+  planArrowAnchor,
   type RoomHandleDrag,
   roomPushHandles,
   runFloorplanMezzanineEdge,
@@ -24,7 +25,10 @@ import {
 import type { RoomDimension } from '../../lib/room-push-dimensions'
 import useEditor from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
-import { useFloorplanRender } from '../editor-2d/floorplan-render-context'
+import {
+  useFloorplanRender,
+  useFloorplanStaticUnitsPerPixel,
+} from '../editor-2d/floorplan-render-context'
 import { FloorplanGeometryRenderer } from '../editor-2d/renderers/floorplan-geometry-renderer'
 import { resolveFloorplanWorldHandleScale } from '../editor-2d/renderers/floorplan-registry-layer'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
@@ -118,23 +122,26 @@ const ARROW_HOVER_FILL = '#a5b4fc'
 
 function PlanArrow({
   position,
+  gap,
   outward,
   kind,
   onPointerDown,
 }: {
   position: Point
+  gap: number
   outward: Point
   kind: 'room-push' | 'mezzanine-edge'
   onPointerDown: (event: ReactPointerEvent<SVGPathElement>) => void
 }) {
   const [hover, setHover] = useState(false)
-  const scale = resolveFloorplanWorldHandleScale(useFloorplanRender()?.unitsPerPixel ?? 0.01)
+  const scale = resolveFloorplanWorldHandleScale(useFloorplanStaticUnitsPerPixel())
   const angle = (Math.atan2(outward[1], outward[0]) * 180) / Math.PI
+  const [x, y] = planArrowAnchor({ position, outward, gap }, scale)
   return (
     <g
       data-room-arrow={kind}
       onClick={(event) => event.stopPropagation()}
-      transform={`translate(${position[0]} ${position[1]}) rotate(${angle}) scale(${scale})`}
+      transform={`translate(${x} ${y}) rotate(${angle}) scale(${scale})`}
     >
       <path d={ARROW_PATH} fill={hover ? ARROW_HOVER_FILL : ARROW_FILL} pointerEvents="none" />
       <path
@@ -205,6 +212,7 @@ export function RoomHandles2D({ levelId }: { levelId: string | null }) {
           kind="room-push"
           onPointerDown={push(handle)}
           outward={handle.outward}
+          gap={handle.gap}
           position={handle.position}
         />
       ))}
@@ -214,6 +222,7 @@ export function RoomHandles2D({ levelId }: { levelId: string | null }) {
           kind="mezzanine-edge"
           onPointerDown={edge(handle)}
           outward={handle.outward}
+          gap={handle.gap}
           position={handle.position}
         />
       ))}

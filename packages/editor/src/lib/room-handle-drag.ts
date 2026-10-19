@@ -147,6 +147,8 @@ export type WallPushHandle = WallPushSpan & {
   key: string
   /** Arrow position (plan) just outside the wall face it points out of. */
   position: Point
+  /** How far `position` sits outside the face along `outward`, m. */
+  gap: number
   /** Arrow height in the level frame (wall base included). */
   height: number
   outward: Point
@@ -182,6 +184,7 @@ function wallPushHandle(
     t0: span.t0,
     t1: span.t1,
     position: [frame.point.x + outward[0] * offset, frame.point.y + outward[1] * offset],
+    gap: offset - face,
     height:
       getWallBaseElevationForNodes(wall, nodes) +
       Math.max(wallHeight - HANDLE_TOP_INSET, HANDLE_MIN_HEIGHT),
@@ -190,6 +193,21 @@ function wallPushHandle(
       ((wall.start[0] + wall.end[0]) / 2) * outward[0] +
       ((wall.start[1] + wall.end[1]) / 2) * outward[1],
   }
+}
+
+// Gap between a plan arrow and the face it pushes, scaled with the arrow.
+const PLAN_ARROW_FACE_GAP = 0.05
+
+/** Where a plan arrow drawn at `scale` sits: on its face, `PLAN_ARROW_FACE_GAP` out, scaled. */
+export function planArrowAnchor(
+  handle: { position: Point; outward: Point; gap: number },
+  scale: number,
+): Point {
+  const pull = handle.gap - PLAN_ARROW_FACE_GAP * scale
+  return [
+    handle.position[0] - handle.outward[0] * pull,
+    handle.position[1] - handle.outward[1] * pull,
+  ]
 }
 
 /** A selected wall's two side arrows (front, back): each pushes the whole wall. */
@@ -545,6 +563,8 @@ export type MezzanineEdgeHandle = {
   key: string
   edgeIndex: number
   position: Point
+  /** How far `position` sits outside the edge along `outward`, m. */
+  gap: number
   outward: Point
   /** The edge's offset along `outward`, so a push lands the edge on the grid. */
   line: number
@@ -582,6 +602,7 @@ export function mezzanineEdgeHandles(nodes: Nodes, zoneId: string): MezzanineEdg
           mid[0] + outward[0] * MEZZANINE_ARROW_OFFSET,
           mid[1] + outward[1] * MEZZANINE_ARROW_OFFSET,
         ],
+        gap: MEZZANINE_ARROW_OFFSET,
         outward,
         line: start[0] * outward[0] + start[1] * outward[1],
         height,

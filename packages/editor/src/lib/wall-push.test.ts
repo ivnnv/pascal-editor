@@ -23,6 +23,7 @@ import { installImmediateAnimationFrames } from '../test-utils/immediate-animati
 import { cancelGestures } from './gesture-lifecycle'
 import {
   getActiveRoomHandleDrag,
+  planArrowAnchor,
   roomPushHandles,
   runFloorplanWallPush,
   runWallPushDrag,
@@ -256,6 +257,28 @@ describe('a selected wall’s side arrows', () => {
     expect(useScene.getState().nodes).toBe(before)
     expect(useScene.temporal.getState().pastStates).toHaveLength(0)
     expect(useViewer.getState().selection.selectedIds).toEqual([east.id])
+  })
+})
+
+describe('the plan arrow’s place next to its wall', () => {
+  // The east wall is centred on x = 6, so its outer face is half its thickness out.
+  const faceX = (handle: WallPushHandle) => handle.position[0] - handle.outward[0] * handle.gap
+
+  test('the handle’s gap leads back to the wall face', () => {
+    const east = wallAtX(6)
+    for (const handle of wallPushHandles(east, useScene.getState().nodes)) {
+      expect(Math.abs(faceX(handle) - 6)).toBeCloseTo((east.thickness ?? 0.1) / 2, 6)
+    }
+  })
+
+  test('the gap to the face shrinks with the arrow, so it reads the same at any zoom', () => {
+    const handle = wallPushHandles(wallAtX(6), useScene.getState().nodes).find(
+      (h) => h.outward[0] > 0.5,
+    )!
+    const gapAt = (scale: number) => planArrowAnchor(handle, scale)[0] - faceX(handle)
+    expect(gapAt(1)).toBeCloseTo(0.05, 6)
+    expect(gapAt(0.1)).toBeCloseTo(0.005, 6)
+    expect(planArrowAnchor(handle, 1)[1]).toBeCloseTo(handle.position[1], 6)
   })
 })
 
